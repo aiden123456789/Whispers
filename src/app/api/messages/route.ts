@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const messages = await getNearbyMessages(lat, lng);
     return NextResponse.json(messages);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
   }
 }
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const saved = await saveMessage(text, lat, lng);
     return NextResponse.json(saved);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Failed to save message" }, { status: 500 });
   }
 }
