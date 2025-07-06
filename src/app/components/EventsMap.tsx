@@ -3,6 +3,8 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
+import L, { DivIcon } from 'leaflet';
+
 
 // 👉  Dynamically load every React‑Leaflet piece (no SSR)
 const MapContainer = dynamic(
@@ -36,7 +38,7 @@ export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
-  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<any>(null);
+  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
   /* ----------  create custom Leaflet icon on client ---------- */
