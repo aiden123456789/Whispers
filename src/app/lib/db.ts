@@ -34,15 +34,15 @@ export async function getNearbyMessages(
     lng + degreeRadius,
   ]);
 
-  // result.rows is an array of arrays by default, convert as needed
-  return result.rows.map(([id, text, lat, lng, createdAt]) => ({
-    id,
-    text,
-    lat,
-    lng,
-    createdAt,
+  return result.rows.map(row => ({
+    id: row.id,
+    text: row.text,
+    lat: row.lat,
+    lng: row.lng,
+    createdAt: row.createdAt,
   }));
 }
+
 
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
