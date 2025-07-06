@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
     "leaflet": "^1.9.4",
     "mongoose": "^8.16.1",
