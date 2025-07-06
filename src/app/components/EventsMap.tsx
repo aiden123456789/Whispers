@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import L, { DivIcon } from 'leaflet';
+import { DivIcon } from 'leaflet';
 
 
 // 👉  Dynamically load every React‑Leaflet piece (no SSR)
