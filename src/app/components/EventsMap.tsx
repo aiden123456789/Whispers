@@ -45,7 +45,7 @@ export default function EventsMap() {
   useEffect(() => {
     import('leaflet').then(L => {
       const icon = L.divIcon({
-        html: '💬…',
+        html: '💬',
         className: 'custom-speech-bubble',
         iconSize: [24, 24],
         iconAnchor: [12, 24],
