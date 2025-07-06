@@ -1,15 +1,22 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
-// Ensure `data/` folder exists
-const dbPath = path.join(process.cwd(), 'data/whispers.db');
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+// Detect if running on Vercel serverless environment
+const isVercel = !!process.env.VERCEL;
 
+// Choose writable directory on Vercel, else use local data folder
+const dbDir = isVercel ? os.tmpdir() : path.join(process.cwd(), 'data');
+
+fs.mkdirSync(dbDir, { recursive: true });
+
+const dbPath = path.join(dbDir, 'whispers.db');
 const db = new Database(dbPath);
+
 db.pragma('journal_mode = WAL');
 
-// Create table if not exists
+// Rest of your code unchanged...
 db.prepare(`
   CREATE TABLE IF NOT EXISTS whispers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,9 +29,8 @@ db.prepare(`
 
 export function getNearbyMessages(lat: number, lng: number, radiusMeters = 50) {
   const now = Date.now();
-  const cutoff = now - 30 * 24 * 60 * 60 * 1000; // 30 days ago
+  const cutoff = now - 30 * 24 * 60 * 60 * 1000;
 
-  // Approximate degree distance for radiusMeters (~111,111 meters per degree)
   const degreeRadius = radiusMeters / 111111;
 
   return db.prepare(`
@@ -43,7 +49,7 @@ export function getNearbyMessages(lat: number, lng: number, radiusMeters = 50) {
 
 export function deleteMessagesNear(lat: number, lng: number, radiusMeters = 30, excludeId?: number) {
   const now = Date.now();
-  const cutoff = now - 30 * 24 * 60 * 60 * 1000; // 30 days ago
+  const cutoff = now - 30 * 24 * 60 * 60 * 1000;
   const degreeRadius = radiusMeters / 111111;
 
   let sql = `
@@ -73,7 +79,6 @@ export function saveMessage(text: string, lat: number, lng: number) {
     VALUES (?, ?, ?, ?)
   `).run(text, lat, lng, now);
 
-  // Delete old messages near this new message, but exclude this new message itself
   deleteMessagesNear(lat, lng, 30, result.lastInsertRowid as number);
 
   return {
