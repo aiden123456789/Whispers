@@ -1,6 +1,6 @@
 // src/app/api/messages/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getNearbyMessages, saveMessage } from "@/lib/db";
+import { getNearbyMessages, saveMessage } from "../../lib/db";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
