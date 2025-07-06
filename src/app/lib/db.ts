@@ -1,91 +1,91 @@
-import Database from 'better-sqlite3';
-import path from 'path';
 import fs from 'fs';
-import os from 'os';
+import path from 'path';
 
-// Detect if running on Vercel serverless environment
-const isVercel = !!process.env.VERCEL;
+// Path to your whispers.json file in the project root
+const dataPath = path.join(process.cwd(), 'whispers.json');
 
-// Choose writable directory on Vercel, else use local data folder
-const dbDir = isVercel ? os.tmpdir() : path.join(process.cwd(), 'data');
+// Helper: read all whispers from JSON file
+function readWhispers() {
+  try {
+    const json = fs.readFileSync(dataPath, 'utf-8');
+    return JSON.parse(json);
+  } catch (e) {
+    // If file missing or invalid, return empty array
+    return [];
+  }
+}
 
-fs.mkdirSync(dbDir, { recursive: true });
+// Helper: save all whispers to JSON file
+function saveWhispers(whispers: any[]) {
+  fs.writeFileSync(dataPath, JSON.stringify(whispers, null, 2), 'utf-8');
+}
 
-const dbPath = path.join(dbDir, 'whispers.db');
-const db = new Database(dbPath);
+// Convert meters radius to approximate degrees latitude/longitude
+function metersToDegrees(meters: number) {
+  return meters / 111111;
+}
 
-db.pragma('journal_mode = WAL');
+// Calculate distance between two lat/lng points using Haversine formula
+function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000; // meters
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
-// Rest of your code unchanged...
-db.prepare(`
-  CREATE TABLE IF NOT EXISTS whispers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    text TEXT,
-    lat REAL,
-    lng REAL,
-    createdAt INTEGER
-  )
-`).run();
-
+// Filter whispers near lat/lng within radiusMeters and within cutoff time
 export function getNearbyMessages(lat: number, lng: number, radiusMeters = 50) {
   const now = Date.now();
   const cutoff = now - 90 * 24 * 60 * 60 * 1000; // 90 days ago
+  const whispers = readWhispers();
 
-  const degreeRadius = radiusMeters / 111111;
-
-  return db.prepare(`
-    SELECT * FROM whispers
-    WHERE createdAt > ?
-      AND lat BETWEEN ? AND ?
-      AND lng BETWEEN ? AND ?
-  `).all(
-    cutoff,
-    lat - degreeRadius,
-    lat + degreeRadius,
-    lng - degreeRadius,
-    lng + degreeRadius
+  return whispers.filter(
+    (w) =>
+      w.createdAt > cutoff &&
+      getDistanceMeters(lat, lng, w.lat, w.lng) <= radiusMeters
   );
 }
 
+// Delete whispers near lat/lng within radiusMeters except excludeId
 export function deleteMessagesNear(lat: number, lng: number, radiusMeters = 30, excludeId?: number) {
-  const now = Date.now();
-  const cutoff = now - 30 * 24 * 60 * 60 * 1000;
-  const degreeRadius = radiusMeters / 111111;
+  const whispers = readWhispers();
 
-  let sql = `
-    DELETE FROM whispers
-    WHERE createdAt > ?
-      AND lat BETWEEN ? AND ?
-      AND lng BETWEEN ? AND ?
-  `;
+  const filtered = whispers.filter((w) => {
+    if (excludeId !== undefined && w.id === excludeId) return true; // keep the new one
+    const dist = getDistanceMeters(lat, lng, w.lat, w.lng);
+    return dist > radiusMeters;
+  });
 
-  if (excludeId !== undefined) {
-    sql += ` AND id != ?`;
-  }
-
-  const stmt = db.prepare(sql);
-
-  if (excludeId !== undefined) {
-    return stmt.run(cutoff, lat - degreeRadius, lat + degreeRadius, lng - degreeRadius, lng + degreeRadius, excludeId);
-  } else {
-    return stmt.run(cutoff, lat - degreeRadius, lat + degreeRadius, lng - degreeRadius, lng + degreeRadius);
-  }
+  saveWhispers(filtered);
 }
 
+// Save new whisper message, assign new ID
 export function saveMessage(text: string, lat: number, lng: number) {
+  const whispers = readWhispers();
   const now = Date.now();
-  const result = db.prepare(`
-    INSERT INTO whispers (text, lat, lng, createdAt)
-    VALUES (?, ?, ?, ?)
-  `).run(text, lat, lng, now);
 
-  deleteMessagesNear(lat, lng, 30, result.lastInsertRowid as number);
+  // Generate new ID (max existing ID + 1)
+  const newId = whispers.length ? Math.max(...whispers.map((w) => w.id)) + 1 : 1;
 
-  return {
-    id: result.lastInsertRowid as number,
+  const newWhisper = {
+    id: newId,
     text,
     lat,
     lng,
     createdAt: now,
   };
+
+  whispers.push(newWhisper);
+
+  // Delete old whispers near this new one except itself
+  deleteMessagesNear(lat, lng, 30, newId);
+
+  saveWhispers(whispers);
+
+  return newWhisper;
 }
