@@ -29,7 +29,7 @@ db.prepare(`
 
 export function getNearbyMessages(lat: number, lng: number, radiusMeters = 50) {
   const now = Date.now();
-  const cutoff = now - 30 * 24 * 60 * 60 * 1000;
+  const cutoff = now - 90 * 24 * 60 * 60 * 1000; // 90 days ago
 
   const degreeRadius = radiusMeters / 111111;
 
