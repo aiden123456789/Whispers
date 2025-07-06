@@ -1,9 +1,13 @@
 // src/lib/db.ts
 import { createClient } from "@libsql/client";
 
+if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
+  throw new Error("Missing Turso environment variables: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN");
+}
+
 export const turso = createClient({
-  url: process.env.TURSO_DATABASE_URL!,     // from .env.local or Vercel env vars
-  authToken: process.env.TURSO_AUTH_TOKEN!, // from .env.local or Vercel env vars
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
 export async function getNearbyMessages(
@@ -48,12 +52,19 @@ export async function saveMessage(text: string, lat: number, lng: number) {
     VALUES (?, ?, ?, ?)
   `;
 
-  const result = await turso.execute(insertSql, [text, lat, lng, now]);
+  await turso.execute(insertSql, [text, lat, lng, now]);
 
-  // Turso may not return lastInsertRowid directly, so you might fetch the last inserted row separately if needed.
-  // For simplicity, just return the data you saved:
+  // Turso does not return lastInsertRowid; fetch the last inserted row as a workaround:
+  const fetchLastInsertedSql = `
+    SELECT * FROM whispers
+    WHERE rowid = (SELECT MAX(rowid) FROM whispers)
+  `;
+
+  const lastInsertedResult = await turso.execute(fetchLastInsertedSql);
+  const [lastRow] = lastInsertedResult.rows;
+
   return {
-    id: null, // You can enhance this by querying the last inserted row if needed
+    id: lastRow ? lastRow[0] : null,
     text,
     lat,
     lng,
