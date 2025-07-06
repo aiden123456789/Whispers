@@ -1,73 +1,86 @@
 // src/lib/db.ts
-import { createClient } from "@libsql/client";
+import { createClient, Row } from "@libsql/client";
 
 if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
-  throw new Error("Missing Turso environment variables: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN");
+  throw new Error("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN");
 }
 
-export const turso = createClient({
+const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
+/* ---------- one‑time table creation (runs on first import) ---------- */
+await turso.execute(`
+  CREATE TABLE IF NOT EXISTS whispers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT,
+    lat  REAL,
+    lng  REAL,
+    createdAt INTEGER
+  );
+`);
+
 export async function getNearbyMessages(
   lat: number,
   lng: number,
-  radiusMeters = 50
+  radiusMeters = 50,
 ) {
-  const now = Date.now();
-  const cutoff = now - 90 * 24 * 60 * 60 * 1000; // 90 days ago
-  const degreeRadius = radiusMeters / 111111;
+  const cutoff        = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
+  const degreeRadius  = radiusMeters / 111_111;
 
-  const sql = `
-    SELECT * FROM whispers
-    WHERE createdAt > ?
-      AND lat BETWEEN ? AND ?
-      AND lng BETWEEN ? AND ?
-  `;
+  const { rows } = await turso.execute(
+    `
+      SELECT * FROM whispers
+      WHERE createdAt > ?
+        AND lat BETWEEN ? AND ?
+        AND lng BETWEEN ? AND ?
+    `,
+    [
+      cutoff,
+      lat - degreeRadius,
+      lat + degreeRadius,
+      lng - degreeRadius,
+      lng + degreeRadius,
+    ],
+  );
 
-  const result = await turso.execute(sql, [
-    cutoff,
-    lat - degreeRadius,
-    lat + degreeRadius,
-    lng - degreeRadius,
-    lng + degreeRadius,
-  ]);
-
-  return result.rows.map(row => ({
-    id: row.id,
-    text: row.text,
-    lat: row.lat,
-    lng: row.lng,
-    createdAt: row.createdAt,
+  return (rows as Row[]).map((r) => ({
+    id:         r.id,
+    text:       r.text,
+    lat:        r.lat,
+    lng:        r.lng,
+    createdAt:  r.createdAt,
   }));
 }
-
 
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
-  const insertSql = `
-    INSERT INTO whispers (text, lat, lng, createdAt)
-    VALUES (?, ?, ?, ?)
-  `;
+  /* insert */
+  await turso.execute(
+    `
+      INSERT INTO whispers (text, lat, lng, createdAt)
+      VALUES (?, ?, ?, ?);
+    `,
+    [text, lat, lng, now],
+  );
 
-  await turso.execute(insertSql, [text, lat, lng, now]);
+  /* retrieve the auto‑incremented id */
+  const { rows } = await turso.execute(`SELECT last_insert_rowid() AS id;`);
+  const id = (rows[0] as Row).id as number;
 
-  // Turso does not return lastInsertRowid; fetch the last inserted row as a workaround:
-  const fetchLastInsertedSql = `
-    SELECT * FROM whispers
-    WHERE rowid = (SELECT MAX(rowid) FROM whispers)
-  `;
+  /* prune old messages within 30 m except new one */
+  const deg30m = 30 / 111_111;
+  await turso.execute(
+    `
+      DELETE FROM whispers
+      WHERE id != ?
+        AND ABS(lat - ?) < ?
+        AND ABS(lng - ?) < ?
+    `,
+    [id, lat, deg30m, lng, deg30m],
+  );
 
-  const lastInsertedResult = await turso.execute(fetchLastInsertedSql);
-  const [lastRow] = lastInsertedResult.rows;
-
-  return {
-    id: lastRow ? lastRow[0] : null,
-    text,
-    lat,
-    lng,
-    createdAt: now,
-  };
+  return { id, text, lat, lng, createdAt: now };
 }
