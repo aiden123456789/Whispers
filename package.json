@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.9",
     "better-sqlite3": "^12.2.0",
     "leaflet": "^1.9.4",
     "mongoose": "^8.16.1",

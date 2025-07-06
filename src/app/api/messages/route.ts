@@ -1,33 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getNearbyMessages, saveMessage } from '../../lib/db';
+// src/app/api/messages/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { getNearbyMessages, saveMessage } from "@/lib/db";
 
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const lat = Number(url.searchParams.get('lat'));
-  const lng = Number(url.searchParams.get('lng'));
-  const radius = Number(url.searchParams.get('radius')) || 50;
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const lat = parseFloat(searchParams.get("lat") || "0");
+  const lng = parseFloat(searchParams.get("lng") || "0");
 
-  if (isNaN(lat) || isNaN(lng)) {
-    return NextResponse.json({ error: 'Invalid or missing lat/lng' }, { status: 400 });
+  if (!lat || !lng) {
+    return NextResponse.json({ error: "Missing lat or lng" }, { status: 400 });
   }
 
-  const messages = getNearbyMessages(lat, lng, radius);
-  return NextResponse.json(messages);
+  try {
+    const messages = await getNearbyMessages(lat, lng);
+    return NextResponse.json(messages);
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 });
+  }
 }
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { text, lat, lng } = body;
+export async function POST(request: NextRequest) {
+  try {
+    const { text, lat, lng } = await request.json();
 
-  if (
-    typeof text !== 'string' ||
-    typeof lat !== 'number' ||
-    typeof lng !== 'number' ||
-    !text.trim()
-  ) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    if (!text || !lat || !lng) {
+      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    }
+
+    const saved = await saveMessage(text, lat, lng);
+    return NextResponse.json(saved);
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to save message" }, { status: 500 });
   }
-
-  const saved = saveMessage(text.trim(), lat, lng);
-  return NextResponse.json(saved, { status: 201 });
 }
