@@ -3,15 +3,13 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import { DivIcon } from 'leaflet';
+import L, { DivIcon, Map } from 'leaflet';
 
-// Dynamically import React-Leaflet components (no SSR)
+// 👉  Dynamically load every React‑Leaflet piece (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
-
-import L from 'leaflet';
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
 
@@ -26,6 +24,7 @@ interface Whisper {
 const MessageList = ({ messages }: { messages: Whisper[] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Reverse messages so newest appear at the top
   const messagesReversed = [...messages].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
@@ -42,23 +41,60 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
   );
 };
 
+// Helper: Calculate distance between two lat/lng points (meters)
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (x: number) => (x * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// Cluster messages within radiusMeters (e.g., 30.48 meters)
+function groupMessagesByRadius(messages: Whisper[], radiusMeters: number) {
+  type Group = {
+    center: [number, number];
+    messages: Whisper[];
+  };
+
+  const groups: Group[] = [];
+
+  messages.forEach(msg => {
+    // Try to find a group that is within radiusMeters of this msg
+    const foundGroup = groups.find(({ center }) =>
+      haversineDistance(center[0], center[1], msg.lat, msg.lng) <= radiusMeters
+    );
+
+    if (foundGroup) {
+      foundGroup.messages.push(msg);
+    } else {
+      // Create new group centered at this message's location
+      groups.push({ center: [msg.lat, msg.lng], messages: [msg] });
+    }
+  });
+
+  return groups;
+}
+
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
+  const mapRef = useRef<Map | null>(null);
   const heatLayerRef = useRef<L.Layer | null>(null);
 
-  // Dynamically import leaflet.heat on client side only
-  useEffect(() => {
-    import('leaflet.heat').then(() => {
-      // leaflet.heat extends L with heatLayer
-      // No extra assignment needed, but we wait for import before usage
-    });
-  }, []);
-
+  /* ----------  create custom Leaflet icon on client ---------- */
   useEffect(() => {
     import('leaflet').then(L => {
       const icon = L.divIcon({
@@ -71,6 +107,7 @@ export default function EventsMap() {
     });
   }, []);
 
+  /* ----------  live geolocation tracking ---------- */
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeoError('Geolocation not supported');
@@ -94,6 +131,7 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
+  /* ----------  fetch whispers whenever user moves ---------- */
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
@@ -103,6 +141,7 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
+  /* ----------  submit a new whisper ---------- */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -121,35 +160,38 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
+  const radiusInMeters = 30.48; // 100 feet
+
+  // Use the clustering function here
+  const groupedMessagesByRadius = groupMessagesByRadius(messages, radiusInMeters);
+
+  /* ---------- heatmap effect ---------- */
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Remove old heat layer if present
-    if (heatLayerRef.current) {
-      heatLayerRef.current.remove();
-      heatLayerRef.current = null;
-    }
+    // Dynamically import leaflet.heat plugin
+    import('leaflet.heat').then(() => {
+      // Filter messages from last hour
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const recentMessages = messages.filter(msg => msg.createdAt >= oneHourAgo);
 
-    const now = Date.now();
-    const oneHourMs = 1000 * 60 * 60;
+      // Prepare heat points: [lat, lng, intensity] — intensity = 1 for each point
+      const heatPoints = recentMessages.map(msg => [msg.lat, msg.lng, 1]);
 
-    // Filter messages less than 1 hour old
-    const heatPoints = messages
-      .filter(msg => now - msg.createdAt <= oneHourMs)
-      .map(msg => {
-        const intensity = 1 - (now - msg.createdAt) / oneHourMs; // newer = higher intensity
-        return [msg.lat, msg.lng, intensity] as [number, number, number];
-      });
+      // Remove existing heatLayer if any
+      if (heatLayerRef.current) {
+        heatLayerRef.current.remove();
+        heatLayerRef.current = null;
+      }
 
-    if (heatPoints.length === 0) return;
-
-    // @ts-ignore: heatLayer added by leaflet.heat plugin
-    heatLayerRef.current = (L as any).heatLayer(heatPoints, {
-      radius: 25,
-      blur: 15,
-      maxZoom: 17,
-      max: 1,
-    }).addTo(mapRef.current);
+      // Create new heatLayer and add to map
+      heatLayerRef.current = (L as any).heatLayer(heatPoints, {
+        radius: 25,
+        blur: 15,
+        maxZoom: 17,
+        max: 1,
+      }).addTo(mapRef.current!);
+    });
   }, [messages]);
 
   if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
@@ -176,13 +218,20 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {messages.length > 0 && messages.map(msg => (
-          <Marker key={msg.id} position={[msg.lat, msg.lng]} icon={speechBubbleIcon}>
-            <Popup>
-              <MessageList messages={[msg]} />
-            </Popup>
-          </Marker>
-        ))}
+        {/* clustered whisper markers */}
+        {groupedMessagesByRadius.map(({ center, messages: group }, index) => {
+          // Sort oldest → newest so newest appear at bottom for popup ordering, but
+          // actual display reversed in MessageList now so newest top
+          const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
+
+          return (
+            <Marker key={index} position={center} icon={speechBubbleIcon}>
+              <Popup>
+                <MessageList messages={sortedGroup} />
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
