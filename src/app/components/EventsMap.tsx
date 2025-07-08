@@ -10,8 +10,8 @@ const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), 
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
-const GROUP_RADIUS_METERS = 30.48;
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
+const GROUP_RADIUS_METERS = 30.48; // 100 feet
 
 interface Whisper {
   id: number;
@@ -43,9 +43,11 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   const toRad = (x: number) => (x * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
+
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -92,8 +94,9 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
+  // ✅ Fetch all messages (not filtered by location)
   useEffect(() => {
-    fetch('/api/messages') // Fetch ALL messages
+    fetch('/api/messages')
       .then(r => r.json())
       .then((data: Whisper[]) => setMessages(data))
       .catch(console.error);
@@ -167,9 +170,7 @@ export default function EventsMap() {
                 {distance <= GROUP_RADIUS_METERS ? (
                   <MessageList messages={group.messages} />
                 ) : (
-                  <div className="text-sm text-gray-600">
-                    Move closer to read these whispers.
-                  </div>
+                  <div className="text-sm text-gray-600">Move closer to read these whispers.</div>
                 )}
               </Popup>
             </Marker>
