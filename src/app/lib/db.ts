@@ -57,7 +57,7 @@ export async function getNearbyMessages(
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
-  /* insert */
+  // Insert the new message
   await turso.execute(
     `
       INSERT INTO whispers (text, lat, lng, createdAt)
@@ -66,21 +66,9 @@ export async function saveMessage(text: string, lat: number, lng: number) {
     [text, lat, lng, now],
   );
 
-  /* retrieve the auto‑incremented id */
+  // Retrieve the auto-incremented ID
   const { rows } = await turso.execute(`SELECT last_insert_rowid() AS id;`);
   const id = (rows[0] as Row).id as number;
-
-  /* prune old messages within 30 m except new one */
-  const deg30m = 30 / 111_111;
-  await turso.execute(
-    `
-      DELETE FROM whispers
-      WHERE id != ?
-        AND ABS(lat - ?) < ?
-        AND ABS(lng - ?) < ?
-    `,
-    [id, lat, deg30m, lng, deg30m],
-  );
 
   return { id, text, lat, lng, createdAt: now };
 }

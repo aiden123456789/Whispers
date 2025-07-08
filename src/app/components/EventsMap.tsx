@@ -5,26 +5,13 @@ import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
 
-
 // 👉  Dynamically load every React‑Leaflet piece (no SSR)
-const MapContainer = dynamic(
-  () => import('react-leaflet').then(m => m.MapContainer),
-  { ssr: false }
-);
-const TileLayer = dynamic(
-  () => import('react-leaflet').then(m => m.TileLayer),
-  { ssr: false }
-);
-const Marker = dynamic(
-  () => import('react-leaflet').then(m => m.Marker),
-  { ssr: false }
-);
-const Popup = dynamic(
-  () => import('react-leaflet').then(m => m.Popup),
-  { ssr: false }
-);
+const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
+const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
+const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
 
 interface Whisper {
   id: number;
@@ -107,6 +94,14 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
+  /* ---------- group messages by rounded lat/lng ---------- */
+  const groupedMessages = messages.reduce((acc, msg) => {
+    const key = `${msg.lat.toFixed(4)},${msg.lng.toFixed(4)}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(msg);
+    return acc;
+  }, {} as Record<string, Whisper[]>);
+
   if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
 
   return (
@@ -128,14 +123,27 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        
-
-        {/* nearby whispers */}
-        {messages.map(({ id, text, lat, lng }) => (
-          <Marker key={id} position={[lat, lng]} icon={speechBubbleIcon}>
-            <Popup>{text}</Popup>
-          </Marker>
-        ))}
+        {/* grouped whisper markers */}
+        {Object.entries(groupedMessages).map(([key, group]) => {
+          const [lat, lng] = key.split(',').map(Number);
+          const sortedGroup = [...group].sort((a, b) => b.createdAt - a.createdAt);
+          return (
+            <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
+              <Popup>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {sortedGroup.map(msg => (
+                    <div key={msg.id} className="text-sm p-1 border-b">
+                      <span className="block text-gray-600 text-xs">
+                        {new Date(msg.createdAt).toLocaleTimeString()}
+                      </span>
+                      <span>{msg.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
