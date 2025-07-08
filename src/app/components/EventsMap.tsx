@@ -1,11 +1,11 @@
 'use client';
 
-import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle, RefObject } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
 
-// 👉 Dynamically load every React‑Leaflet piece (no SSR)
+// 👉 Dynamically load Leaflet components (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
@@ -21,7 +21,11 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = forwardRef(({ messages }: { messages: Whisper[] }, ref) => {
+interface MessageListHandle {
+  scrollToBottom: () => void;
+}
+
+const MessageList = forwardRef<MessageListHandle, { messages: Whisper[] }>(({ messages }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -55,9 +59,8 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  const messageListRefs = useRef<Record<string, React.RefObject<{ scrollToBottom: () => void }>>>({});
+  const messageListRefs = useRef<Record<string, RefObject<MessageListHandle>>>({});
 
-  /* ----------  create custom Leaflet icon on client ---------- */
   useEffect(() => {
     import('leaflet').then(L => {
       const icon = L.divIcon({
@@ -70,7 +73,6 @@ export default function EventsMap() {
     });
   }, []);
 
-  /* ----------  live geolocation tracking ---------- */
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeoError('Geolocation not supported');
@@ -94,7 +96,6 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  /* ----------  fetch whispers whenever user moves ---------- */
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
@@ -104,7 +105,6 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
-  /* ----------  submit a new whisper ---------- */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -123,7 +123,6 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  /* ---------- group messages by rounded lat/lng ---------- */
   const groupedMessages = messages.reduce((acc, msg) => {
     const key = `${msg.lat.toFixed(4)},${msg.lng.toFixed(4)}`;
     if (!acc[key]) acc[key] = [];
@@ -131,12 +130,11 @@ export default function EventsMap() {
     return acc;
   }, {} as Record<string, Whisper[]>);
 
-  // Pre-create refs for each key
-  Object.keys(groupedMessages).forEach(key => {
+  for (const key of Object.keys(groupedMessages)) {
     if (!messageListRefs.current[key]) {
-      messageListRefs.current[key] = React.createRef();
+      messageListRefs.current[key] = useRef<MessageListHandle>(null);
     }
-  });
+  }
 
   if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
 
@@ -159,18 +157,17 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* grouped whisper markers */}
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
-          const messageListRef = messageListRefs.current[key];
+          const messageListRef = messageListRefs.current[key]!;
 
           return (
             <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
               <Popup
                 eventHandlers={{
                   popupopen: () => {
-                    messageListRef?.current?.scrollToBottom();
+                    messageListRef.current?.scrollToBottom();
                   },
                 }}
               >
