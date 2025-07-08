@@ -165,13 +165,25 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {groupedMessages.map((group, i) => (
-          <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
-            <Popup>
-              <MessageList messages={group.messages} />
-            </Popup>
-          </Marker>
-        ))}
+        {groupedMessages.map((group, i) => {
+          const distance = center
+            ? haversineDistance(center[0], center[1], group.lat, group.lng)
+            : Infinity;
+
+          return (
+            <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+              <Popup>
+                {distance <= GROUP_RADIUS_METERS ? (
+                  <MessageList messages={group.messages} />
+                ) : (
+                  <div className="text-sm text-gray-600">
+                    Move closer to read these whispers.
+                  </div>
+                )}
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
