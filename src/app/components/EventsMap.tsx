@@ -1,6 +1,14 @@
 'use client';
 
-import { useRef, useEffect, useState, forwardRef, useImperativeHandle, RefObject } from 'react';
+import {
+  useRef,
+  useEffect,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+  RefObject,
+  createRef,
+} from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
@@ -11,7 +19,7 @@ const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), 
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 
 interface Whisper {
   id: number;
@@ -59,6 +67,7 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
+  // Use plain object refs (not hooks) for popup scroll control
   const messageListRefs = useRef<Record<string, RefObject<MessageListHandle>>>({});
 
   useEffect(() => {
@@ -130,12 +139,6 @@ export default function EventsMap() {
     return acc;
   }, {} as Record<string, Whisper[]>);
 
-  for (const key of Object.keys(groupedMessages)) {
-    if (!messageListRefs.current[key]) {
-      messageListRefs.current[key] = useRef<MessageListHandle>(null);
-    }
-  }
-
   if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
 
   return (
@@ -160,6 +163,12 @@ export default function EventsMap() {
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
+
+          // Create or retrieve a persistent ref
+          if (!messageListRefs.current[key]) {
+            messageListRefs.current[key] = createRef<MessageListHandle>();
+          }
+
           const messageListRef = messageListRefs.current[key]!;
 
           return (
