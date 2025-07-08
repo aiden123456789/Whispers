@@ -29,9 +29,8 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
       ref={containerRef}
       className="space-y-2 max-h-48 overflow-y-auto"
     >
-      {messages
+      {[...messages]
         .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
-        .reverse() // Flip so newest at the top visually
         .map(msg => (
           <div key={msg.id} className="text-sm p-1 border-b">
             <span className="block text-gray-600 text-xs">
@@ -127,7 +126,6 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group messages within 100 feet
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
 
   for (const msg of messages) {
