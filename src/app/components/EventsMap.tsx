@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import { DivIcon } from 'leaflet';
+import L, { DivIcon } from 'leaflet';
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -25,7 +25,7 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
   return (
     <div className="space-y-2 max-h-48 overflow-y-auto">
       {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt)
+        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
         .map(msg => (
           <div key={msg.id} className="text-sm p-1 border-b">
             <span className="block text-gray-600 text-xs">
@@ -56,20 +56,7 @@ export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
-  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    import('leaflet').then(L => {
-      const icon = L.divIcon({
-        html: '💬',
-        className: 'custom-speech-bubble',
-        iconSize: [24, 24],
-        iconAnchor: [12, 24],
-      });
-      setSpeechBubbleIcon(icon);
-    });
-  }, []);
 
   useEffect(() => {
     if (!('geolocation' in navigator)) {
@@ -94,7 +81,7 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  // ✅ Fetch all messages (not filtered by location)
+  // Fetch all messages (no location filter)
   useEffect(() => {
     fetch('/api/messages')
       .then(r => r.json())
@@ -120,6 +107,7 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
+  // Group messages by proximity
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
 
   for (const msg of messages) {
@@ -138,7 +126,7 @@ export default function EventsMap() {
     }
   }
 
-  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
+  if (!center) return <p>Loading map…</p>;
 
   return (
     <>
@@ -160,12 +148,18 @@ export default function EventsMap() {
         />
 
         {groupedMessages.map((group, i) => {
-          const distance = center
-            ? haversineDistance(center[0], center[1], group.lat, group.lng)
-            : Infinity;
+          const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
+
+          // Create a unique DivIcon per marker
+          const icon = L.divIcon({
+            html: '💬',
+            className: 'custom-speech-bubble',
+            iconSize: [24, 24],
+            iconAnchor: [12, 24],
+          });
 
           return (
-            <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+            <Marker key={i} position={[group.lat, group.lng]} icon={icon}>
               <Popup>
                 {distance <= GROUP_RADIUS_METERS ? (
                   <MessageList messages={group.messages} />
