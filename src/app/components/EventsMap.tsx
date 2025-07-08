@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useState, forwardRef } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
@@ -21,17 +21,8 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = forwardRef(({ messages }: { messages: Whisper[] }, ref) => {
+const MessageList = ({ messages }: { messages: Whisper[] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Expose scrollToBottom method to parent via ref
-  useImperativeHandle(ref, () => ({
-    scrollToBottom: () => {
-      if (containerRef.current) {
-        containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      }
-    },
-  }));
 
   return (
     <div
@@ -48,7 +39,7 @@ const MessageList = forwardRef(({ messages }: { messages: Whisper[] }, ref) => {
       ))}
     </div>
   );
-});
+};
 
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
@@ -157,18 +148,11 @@ export default function EventsMap() {
           const [lat, lng] = key.split(',').map(Number);
           // Sort oldest → newest so newest appear at bottom
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
-          const messageListRef = useRef<{ scrollToBottom: () => void }>(null);
 
           return (
             <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
-              <Popup
-                eventHandlers={{
-                  popupopen: () => {
-                    messageListRef.current?.scrollToBottom();
-                  },
-                }}
-              >
-                <MessageList ref={messageListRef} messages={sortedGroup} />
+              <Popup>
+                <MessageList messages={sortedGroup} />
               </Popup>
             </Marker>
           );
