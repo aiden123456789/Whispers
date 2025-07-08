@@ -3,7 +3,15 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import L, { DivIcon, Map } from 'leaflet';
+import * as L from 'leaflet';
+
+// Add leaflet heat plugin typings for TS
+declare module 'leaflet' {
+  function heatLayer(
+    latlngs: Array<[number, number, number]>,
+    options?: any
+  ): L.Layer;
+}
 
 // 👉  Dynamically load every React‑Leaflet piece (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
@@ -28,7 +36,10 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
   const messagesReversed = [...messages].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
-    <div ref={containerRef} className="space-y-2 max-h-48 overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
       {messagesReversed.map(msg => (
         <div key={msg.id} className="text-sm p-1 border-b">
           <span className="block text-gray-600 text-xs">
@@ -59,7 +70,7 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 }
 
-// Cluster messages within radiusMeters (e.g., 30.48 meters)
+// Cluster messages within radiusMeters (e.g., 30.48 meters = 100 feet)
 function groupMessagesByRadius(messages: Whisper[], radiusMeters: number) {
   type Group = {
     center: [number, number];
@@ -89,22 +100,21 @@ export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
-  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
+  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<L.DivIcon | null>(null);
+
   const whisperInput = useRef<HTMLInputElement>(null);
-  const mapRef = useRef<Map | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const heatLayerRef = useRef<L.Layer | null>(null);
 
   /* ----------  create custom Leaflet icon on client ---------- */
   useEffect(() => {
-    import('leaflet').then(L => {
-      const icon = L.divIcon({
-        html: '💬',
-        className: 'custom-speech-bubble',
-        iconSize: [24, 24],
-        iconAnchor: [12, 24],
-      });
-      setSpeechBubbleIcon(icon);
+    const icon = L.divIcon({
+      html: '💬',
+      className: 'custom-speech-bubble',
+      iconSize: [24, 24],
+      iconAnchor: [12, 24],
     });
+    setSpeechBubbleIcon(icon);
   }, []);
 
   /* ----------  live geolocation tracking ---------- */
@@ -165,34 +175,31 @@ export default function EventsMap() {
   // Use the clustering function here
   const groupedMessagesByRadius = groupMessagesByRadius(messages, radiusInMeters);
 
-  /* ---------- heatmap effect ---------- */
+  // Heatmap setup: filter messages created within last 1 hour, map to [lat, lng, intensity]
+  const heatPoints = messages
+    .filter(msg => (Date.now() - msg.createdAt) <= 1000 * 60 * 60) // 1 hour
+    .map(msg => [msg.lat, msg.lng, 1] as [number, number, number]);
+
+  /* ----------  manage heatmap layer ---------- */
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Dynamically import leaflet.heat plugin
-    import('leaflet.heat').then(() => {
-      // Filter messages from last hour
-      const oneHourAgo = Date.now() - 60 * 60 * 1000;
-      const recentMessages = messages.filter(msg => msg.createdAt >= oneHourAgo);
+    // Remove existing heatmap layer if any
+    if (heatLayerRef.current) {
+      heatLayerRef.current.remove();
+      heatLayerRef.current = null;
+    }
 
-      // Prepare heat points: [lat, lng, intensity] — intensity = 1 for each point
-      const heatPoints = recentMessages.map(msg => [msg.lat, msg.lng, 1]);
+    if (heatPoints.length === 0) return;
 
-      // Remove existing heatLayer if any
-      if (heatLayerRef.current) {
-        heatLayerRef.current.remove();
-        heatLayerRef.current = null;
-      }
-
-      // Create new heatLayer and add to map
-      heatLayerRef.current = (L as any).heatLayer(heatPoints, {
-        radius: 25,
-        blur: 15,
-        maxZoom: 17,
-        max: 1,
-      }).addTo(mapRef.current!);
-    });
-  }, [messages]);
+    // Create new heatmap layer
+    heatLayerRef.current = L.heatLayer(heatPoints, {
+      radius: 25,
+      blur: 15,
+      maxZoom: 17,
+      max: 1,
+    }).addTo(mapRef.current);
+  }, [heatPoints]);
 
   if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
@@ -209,9 +216,7 @@ export default function EventsMap() {
         zoom={16}
         scrollWheelZoom
         style={{ height: '80vh', width: '100%' }}
-        whenCreated={mapInstance => {
-          mapRef.current = mapInstance;
-        }}
+        whenCreated={mapInstance => (mapRef.current = mapInstance)}
       >
         <TileLayer
           attribution="&copy; OpenStreetMap"
@@ -220,8 +225,7 @@ export default function EventsMap() {
 
         {/* clustered whisper markers */}
         {groupedMessagesByRadius.map(({ center, messages: group }, index) => {
-          // Sort oldest → newest so newest appear at bottom for popup ordering, but
-          // actual display reversed in MessageList now so newest top
+          // Sort oldest → newest for popup, display reversed inside MessageList
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
 
           return (
