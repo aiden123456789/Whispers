@@ -1,25 +1,16 @@
 'use client';
 
-import {
-  useRef,
-  useEffect,
-  useState,
-  forwardRef,
-  useImperativeHandle,
-  RefObject,
-  createRef,
-} from 'react';
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
 
-// 👉 Dynamically load Leaflet components (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
 
 interface Whisper {
   id: number;
@@ -29,7 +20,7 @@ interface Whisper {
   createdAt: number;
 }
 
-interface MessageListHandle {
+export interface MessageListHandle {
   scrollToBottom: () => void;
 }
 
@@ -45,7 +36,10 @@ const MessageList = forwardRef<MessageListHandle, { messages: Whisper[] }>(({ me
   }));
 
   return (
-    <div ref={containerRef} className="space-y-2 max-h-48 overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
       {messages.map(msg => (
         <div key={msg.id} className="text-sm p-1 border-b">
           <span className="block text-gray-600 text-xs">
@@ -57,7 +51,6 @@ const MessageList = forwardRef<MessageListHandle, { messages: Whisper[] }>(({ me
     </div>
   );
 });
-
 MessageList.displayName = 'MessageList';
 
 export default function EventsMap() {
@@ -66,9 +59,6 @@ export default function EventsMap() {
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
-
-  // Use plain object refs (not hooks) for popup scroll control
-  const messageListRefs = useRef<Record<string, RefObject<MessageListHandle | null>>>({});
 
   useEffect(() => {
     import('leaflet').then(L => {
@@ -163,24 +153,18 @@ export default function EventsMap() {
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
-
-          // Create or retrieve a persistent ref
-          if (!messageListRefs.current[key]) {
-            messageListRefs.current[key] = createRef<MessageListHandle>();
-          }
-
-          const messageListRef = messageListRefs.current[key]!;
+          const ref = useRef<MessageListHandle>(null);
 
           return (
             <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
               <Popup
                 eventHandlers={{
                   popupopen: () => {
-                    messageListRef.current?.scrollToBottom();
+                    ref.current?.scrollToBottom();
                   },
                 }}
               >
-                <MessageList ref={messageListRef} messages={sortedGroup} />
+                <MessageList ref={ref} messages={sortedGroup} />
               </Popup>
             </Marker>
           );
