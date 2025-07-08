@@ -44,6 +44,50 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
   );
 };
 
+// Helper: Calculate distance between two lat/lng points (meters)
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (x: number) => (x * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+// Cluster messages within radiusMeters (e.g., 30.48 meters)
+function groupMessagesByRadius(messages: Whisper[], radiusMeters: number) {
+  type Group = {
+    center: [number, number];
+    messages: Whisper[];
+  };
+
+  const groups: Group[] = [];
+
+  messages.forEach(msg => {
+    // Try to find a group that is within radiusMeters of this msg
+    const foundGroup = groups.find(({ center }) =>
+      haversineDistance(center[0], center[1], msg.lat, msg.lng) <= radiusMeters
+    );
+
+    if (foundGroup) {
+      foundGroup.messages.push(msg);
+    } else {
+      // Create new group centered at this message's location
+      groups.push({ center: [msg.lat, msg.lng], messages: [msg] });
+    }
+  });
+
+  return groups;
+}
+
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -117,13 +161,10 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  /* ---------- group messages by rounded lat/lng ---------- */
-  const groupedMessages = messages.reduce((acc, msg) => {
-    const key = `${msg.lat.toFixed(4)},${msg.lng.toFixed(4)}`;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(msg);
-    return acc;
-  }, {} as Record<string, Whisper[]>);
+  const radiusInMeters = 30.48; // 100 feet
+
+  // Use the clustering function here
+  const groupedMessagesByRadius = groupMessagesByRadius(messages, radiusInMeters);
 
   if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
 
@@ -146,15 +187,14 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* grouped whisper markers */}
-        {Object.entries(groupedMessages).map(([key, group]) => {
-          const [lat, lng] = key.split(',').map(Number);
+        {/* clustered whisper markers */}
+        {groupedMessagesByRadius.map(({ center, messages: group }, index) => {
           // Sort oldest → newest so newest appear at bottom for popup ordering, but
           // actual display reversed in MessageList now so newest top
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
 
           return (
-            <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
+            <Marker key={index} position={center} icon={speechBubbleIcon}>
               <Popup>
                 <MessageList messages={sortedGroup} />
               </Popup>
