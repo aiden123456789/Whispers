@@ -66,9 +66,6 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  // Distance in meters to allow popup open (about 100 feet)
-  const allowedRadiusMeters = 30.48;
-
   /* ----------  create custom Leaflet icon on client ---------- */
   useEffect(() => {
     import('leaflet').then(L => {
@@ -143,6 +140,8 @@ export default function EventsMap() {
     return acc;
   }, {} as Record<string, Whisper[]>);
 
+  const allowedRadiusMeters = 30.48; // 100 feet
+
   if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
 
   return (
@@ -164,12 +163,12 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Show all speech bubble markers */}
+        {/* grouped whisper markers */}
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
+          // Sort oldest → newest so newest appear at bottom
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
 
-          // Calculate distance from user to this marker
           const userDistance = center ? haversineDistance(center[0], center[1], lat, lng) : Infinity;
 
           return (
@@ -177,21 +176,16 @@ export default function EventsMap() {
               key={key}
               position={[lat, lng]}
               icon={speechBubbleIcon}
-              // Only allow popup open if user is within allowedRadiusMeters
               eventHandlers={{
                 click: (e) => {
                   if (userDistance <= allowedRadiusMeters) {
-                    // Open popup programmatically
-                    // @ts-expect-error TS doesn't know Leaflet internals
-                    e.target.openPopup();
+                    (e.target as any).openPopup();
                   } else {
-                    // Otherwise do nothing or show alert
                     alert('You must be within 100 feet to read messages here.');
                   }
                 }
               }}
             >
-              {/* Conditionally render popup only if user is close enough */}
               {userDistance <= allowedRadiusMeters && (
                 <Popup>
                   <MessageList messages={sortedGroup} />
@@ -220,7 +214,6 @@ export default function EventsMap() {
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
-          cursor: pointer;
         }
       `}</style>
     </>
