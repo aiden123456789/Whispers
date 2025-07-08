@@ -5,6 +5,9 @@ import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
 
+// Leaflet types for event
+import type { LeafletMouseEvent, Marker as LeafletMarker } from 'leaflet';
+
 // 👉  Dynamically load every React‑Leaflet piece (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -142,7 +145,7 @@ export default function EventsMap() {
 
   const allowedRadiusMeters = 30.48; // 100 feet
 
-  if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
+  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -166,9 +169,7 @@ export default function EventsMap() {
         {/* grouped whisper markers */}
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
-          // Sort oldest → newest so newest appear at bottom
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
-
           const userDistance = center ? haversineDistance(center[0], center[1], lat, lng) : Infinity;
 
           return (
@@ -177,9 +178,10 @@ export default function EventsMap() {
               position={[lat, lng]}
               icon={speechBubbleIcon}
               eventHandlers={{
-                click: (e) => {
+                click: (e: LeafletMouseEvent) => {
+                  const marker = e.target as LeafletMarker;
                   if (userDistance <= allowedRadiusMeters) {
-                    (e.target as any).openPopup();
+                    marker.openPopup();
                   } else {
                     alert('You must be within 100 feet to read messages here.');
                   }
