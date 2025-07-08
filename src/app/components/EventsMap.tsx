@@ -68,7 +68,7 @@ export default function EventsMap() {
   const whisperInput = useRef<HTMLInputElement>(null);
 
   // Use plain object refs (not hooks) for popup scroll control
-  const messageListRefs = useRef<Record<string, RefObject<MessageListHandle>>>({});
+  const messageListRefs = useRef<Record<string, RefObject<MessageListHandle | null>>>({});
 
   useEffect(() => {
     import('leaflet').then(L => {
