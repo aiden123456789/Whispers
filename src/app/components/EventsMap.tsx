@@ -1,10 +1,11 @@
 'use client';
 
-import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
 
+// 👉  Dynamically load every React‑Leaflet piece (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
@@ -20,27 +21,18 @@ interface Whisper {
   createdAt: number;
 }
 
-export interface MessageListHandle {
-  scrollToBottom: () => void;
-}
-
-const MessageList = forwardRef<MessageListHandle, { messages: Whisper[] }>(({ messages }, ref) => {
+const MessageList = ({ messages }: { messages: Whisper[] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useImperativeHandle(ref, () => ({
-    scrollToBottom: () => {
-      if (containerRef.current) {
-        containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      }
-    },
-  }));
+  // Reverse messages so newest appear at the top
+  const messagesReversed = [...messages].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
     <div
       ref={containerRef}
       className="space-y-2 max-h-48 overflow-y-auto"
     >
-      {messages.map(msg => (
+      {messagesReversed.map(msg => (
         <div key={msg.id} className="text-sm p-1 border-b">
           <span className="block text-gray-600 text-xs">
             {new Date(msg.createdAt).toLocaleTimeString()}
@@ -50,8 +42,7 @@ const MessageList = forwardRef<MessageListHandle, { messages: Whisper[] }>(({ me
       ))}
     </div>
   );
-});
-MessageList.displayName = 'MessageList';
+};
 
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
@@ -60,9 +51,7 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  // Store refs for each marker key here
-  const messageListRefs = useRef<Record<string, React.RefObject<MessageListHandle>>>({});
-
+  /* ----------  create custom Leaflet icon on client ---------- */
   useEffect(() => {
     import('leaflet').then(L => {
       const icon = L.divIcon({
@@ -75,6 +64,7 @@ export default function EventsMap() {
     });
   }, []);
 
+  /* ----------  live geolocation tracking ---------- */
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeoError('Geolocation not supported');
@@ -98,6 +88,7 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
+  /* ----------  fetch whispers whenever user moves ---------- */
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
@@ -107,6 +98,7 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
+  /* ----------  submit a new whisper ---------- */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -125,6 +117,7 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
+  /* ---------- group messages by rounded lat/lng ---------- */
   const groupedMessages = messages.reduce((acc, msg) => {
     const key = `${msg.lat.toFixed(4)},${msg.lng.toFixed(4)}`;
     if (!acc[key]) acc[key] = [];
@@ -153,25 +146,17 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        {/* grouped whisper markers */}
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
+          // Sort oldest → newest so newest appear at bottom for popup ordering, but
+          // actual display reversed in MessageList now so newest top
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
-
-          // Create or reuse ref for this key
-          if (!messageListRefs.current[key]) {
-            messageListRefs.current[key] = React.createRef<MessageListHandle>();
-          }
 
           return (
             <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
-              <Popup
-                eventHandlers={{
-                  popupopen: () => {
-                    messageListRefs.current[key]?.current?.scrollToBottom();
-                  },
-                }}
-              >
-                <MessageList ref={messageListRefs.current[key]} messages={sortedGroup} />
+              <Popup>
+                <MessageList messages={sortedGroup} />
               </Popup>
             </Marker>
           );
