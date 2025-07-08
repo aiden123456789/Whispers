@@ -21,6 +21,32 @@ interface Whisper {
   createdAt: number;
 }
 
+function MessageList({ messages }: { messages: Whisper[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
+      {messages.map(msg => (
+        <div key={msg.id} className="text-sm p-1 border-b">
+          <span className="block text-gray-600 text-xs">
+            {new Date(msg.createdAt).toLocaleTimeString()}
+          </span>
+          <span>{msg.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -126,20 +152,12 @@ export default function EventsMap() {
         {/* grouped whisper markers */}
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
-          const sortedGroup = [...group].sort((a, b) => b.createdAt - a.createdAt);
+          // Sort oldest → newest so newest appear at bottom
+          const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
           return (
             <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
               <Popup>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {sortedGroup.map(msg => (
-                    <div key={msg.id} className="text-sm p-1 border-b">
-                      <span className="block text-gray-600 text-xs">
-                        {new Date(msg.createdAt).toLocaleTimeString()}
-                      </span>
-                      <span>{msg.text}</span>
-                    </div>
-                  ))}
-                </div>
+                <MessageList messages={sortedGroup} />
               </Popup>
             </Marker>
           );
