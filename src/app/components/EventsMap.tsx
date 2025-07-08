@@ -60,6 +60,9 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
+  // Store refs for each marker key here
+  const messageListRefs = useRef<Record<string, React.RefObject<MessageListHandle>>>({});
+
   useEffect(() => {
     import('leaflet').then(L => {
       const icon = L.divIcon({
@@ -153,18 +156,22 @@ export default function EventsMap() {
         {Object.entries(groupedMessages).map(([key, group]) => {
           const [lat, lng] = key.split(',').map(Number);
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
-          const ref = useRef<MessageListHandle>(null);
+
+          // Create or reuse ref for this key
+          if (!messageListRefs.current[key]) {
+            messageListRefs.current[key] = React.createRef<MessageListHandle>();
+          }
 
           return (
             <Marker key={key} position={[lat, lng]} icon={speechBubbleIcon}>
               <Popup
                 eventHandlers={{
                   popupopen: () => {
-                    ref.current?.scrollToBottom();
+                    messageListRefs.current[key]?.current?.scrollToBottom();
                   },
                 }}
               >
-                <MessageList ref={ref} messages={sortedGroup} />
+                <MessageList ref={messageListRefs.current[key]} messages={sortedGroup} />
               </Popup>
             </Marker>
           );
