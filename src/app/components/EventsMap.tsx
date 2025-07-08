@@ -3,18 +3,9 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import * as L from 'leaflet';
-import { useMap } from 'react-leaflet';
+import { DivIcon } from 'leaflet';
 
-// Add leaflet heat plugin typings for TS
-declare module 'leaflet' {
-  function heatLayer(
-    latlngs: Array<[number, number, number]>,
-    options?: object
-  ): L.Layer;
-}
-
-// Dynamically load React-Leaflet components (no SSR)
+// 👉  Dynamically load every React‑Leaflet piece (no SSR)
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
@@ -31,68 +22,128 @@ interface Whisper {
 }
 
 const MessageList = ({ messages }: { messages: Whisper[] }) => {
-  // ... same as before ...
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
+      {messages.map(msg => (
+        <div key={msg.id} className="text-sm p-1 border-b">
+          <span className="block text-gray-600 text-xs">
+            {new Date(msg.createdAt).toLocaleTimeString()}
+          </span>
+          <span>{msg.text}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
-// Haversine distance and grouping functions same as before ...
+// Helper: Calculate distance between two lat/lng points (meters)
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (x: number) => (x * Math.PI) / 180;
 
-// HeatmapLayer component manages adding/removing heat layer
-function HeatmapLayer({ points }: { points: Array<[number, number, number]> }) {
-  const map = useMap();
-  const heatLayerRef = useRef<L.Layer | null>(null);
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
 
-  useEffect(() => {
-    // Remove previous heat layer
-    if (heatLayerRef.current) {
-      heatLayerRef.current.remove();
-      heatLayerRef.current = null;
-    }
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
 
-    if (points.length === 0) return;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    heatLayerRef.current = L.heatLayer(points, {
-      radius: 25,
-      blur: 15,
-      maxZoom: 17,
-      max: 1,
-    }).addTo(map);
-
-    // Cleanup on unmount
-    return () => {
-      if (heatLayerRef.current) {
-        heatLayerRef.current.remove();
-        heatLayerRef.current = null;
-      }
-    };
-  }, [map, points]);
-
-  return null;
+  return R * c;
 }
 
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
-  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<L.DivIcon | null>(null);
+  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  // create icon effect same as before...
+  // Distance in meters to allow popup open (about 100 feet)
+  const allowedRadiusMeters = 30.48;
 
-  // geolocation watch same as before...
+  /* ----------  create custom Leaflet icon on client ---------- */
+  useEffect(() => {
+    import('leaflet').then(L => {
+      const icon = L.divIcon({
+        html: '💬',
+        className: 'custom-speech-bubble',
+        iconSize: [24, 24],
+        iconAnchor: [12, 24],
+      });
+      setSpeechBubbleIcon(icon);
+    });
+  }, []);
 
-  // fetch messages on center change same as before...
+  /* ----------  live geolocation tracking ---------- */
+  useEffect(() => {
+    if (!('geolocation' in navigator)) {
+      setGeoError('Geolocation not supported');
+      setCenter(FALLBACK_CENTER);
+      return;
+    }
 
-  // handleSubmit same as before...
+    const id = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        setCenter([coords.latitude, coords.longitude]);
+        setGeoError(null);
+      },
+      err => {
+        console.error(err);
+        setGeoError(err.message || 'Location error');
+        setCenter(FALLBACK_CENTER);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 
-  const radiusInMeters = 30.48; // 100 feet
-  const groupedMessagesByRadius = groupMessagesByRadius(messages, radiusInMeters);
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
 
-  // Filter messages for heatmap (last 1 hour)
-  const heatPoints = messages
-    .filter(msg => (Date.now() - msg.createdAt) <= 1000 * 60 * 60)
-    .map(msg => [msg.lat, msg.lng, 1] as [number, number, number]);
+  /* ----------  fetch whispers whenever user moves ---------- */
+  useEffect(() => {
+    if (!center) return;
+    const [lat, lng] = center;
+    fetch(`/api/messages?lat=${lat}&lng=${lng}`)
+      .then(r => r.json())
+      .then((data: Whisper[]) => setMessages(data))
+      .catch(console.error);
+  }, [center]);
 
-  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
+  /* ----------  submit a new whisper ---------- */
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!center) return;
+
+    const text = whisperInput.current?.value.trim() ?? '';
+    if (!text) return;
+
+    const [lat, lng] = center;
+    const res = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lat, lng }),
+    });
+    const newWhisper = await res.json();
+    setMessages(prev => [...prev, newWhisper]);
+    if (whisperInput.current) whisperInput.current.value = '';
+  }
+
+  /* ---------- group messages by rounded lat/lng ---------- */
+  const groupedMessages = messages.reduce((acc, msg) => {
+    const key = `${msg.lat.toFixed(4)},${msg.lng.toFixed(4)}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(msg);
+    return acc;
+  }, {} as Record<string, Whisper[]>);
+
+  if (!center || !speechBubbleIcon) return <p>Loading map …</p>;
 
   return (
     <>
@@ -113,20 +164,42 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* clustered whisper markers */}
-        {groupedMessagesByRadius.map(({ center, messages: group }, index) => {
+        {/* Show all speech bubble markers */}
+        {Object.entries(groupedMessages).map(([key, group]) => {
+          const [lat, lng] = key.split(',').map(Number);
           const sortedGroup = [...group].sort((a, b) => a.createdAt - b.createdAt);
+
+          // Calculate distance from user to this marker
+          const userDistance = center ? haversineDistance(center[0], center[1], lat, lng) : Infinity;
+
           return (
-            <Marker key={index} position={center} icon={speechBubbleIcon}>
-              <Popup>
-                <MessageList messages={sortedGroup} />
-              </Popup>
+            <Marker
+              key={key}
+              position={[lat, lng]}
+              icon={speechBubbleIcon}
+              // Only allow popup open if user is within allowedRadiusMeters
+              eventHandlers={{
+                click: (e) => {
+                  if (userDistance <= allowedRadiusMeters) {
+                    // Open popup programmatically
+                    // @ts-expect-error TS doesn't know Leaflet internals
+                    e.target.openPopup();
+                  } else {
+                    // Otherwise do nothing or show alert
+                    alert('You must be within 100 feet to read messages here.');
+                  }
+                }
+              }}
+            >
+              {/* Conditionally render popup only if user is close enough */}
+              {userDistance <= allowedRadiusMeters && (
+                <Popup>
+                  <MessageList messages={sortedGroup} />
+                </Popup>
+              )}
             </Marker>
           );
         })}
-
-        {/* Heatmap Layer */}
-        <HeatmapLayer points={heatPoints} />
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
@@ -147,6 +220,7 @@ export default function EventsMap() {
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
+          cursor: pointer;
         }
       `}</style>
     </>
