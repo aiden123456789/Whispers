@@ -6,7 +6,7 @@ import { DivIcon } from 'leaflet';
 import { Whisper } from './types';
 import { MessageList } from './MessageList';
 import { haversineDistance } from './utils';
-import { useGeolocation } from './useGeolocation';
+import { useGeolocation } from './useGeolocation'; // optional
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -20,43 +20,30 @@ export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
-  const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  // Setup Leaflet icons
   useEffect(() => {
     import('leaflet').then(L => {
-      setSpeechBubbleIcon(
-        L.divIcon({
-          html: '💬',
-          className: 'custom-speech-bubble',
-          iconSize: [24, 24],
-          iconAnchor: [12, 24],
-        })
-      );
-      setGreenDotIcon(
-        L.divIcon({
-          html: '🟢',
-          className: 'custom-green-dot',
-          iconSize: [20, 20],
-          iconAnchor: [10, 20],
-        })
-      );
+      const icon = L.divIcon({
+        html: '💬',
+        className: 'custom-speech-bubble',
+        iconSize: [24, 24],
+        iconAnchor: [12, 24],
+      });
+      setSpeechBubbleIcon(icon);
     });
   }, []);
 
-  // Fetch nearby messages
   useEffect(() => {
     if (!center) return;
 
     const [lat, lng] = center;
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
-      .then(res => res.json())
+      .then(r => r.json())
       .then((data: Whisper[]) => setMessages(data))
       .catch(console.error);
   }, [center]);
 
-  // Submit new whisper
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -75,32 +62,26 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Grouping logic
+  // Group messages by proximity
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
-  const ungroupedMessages: Whisper[] = [];
-  const assignedIds = new Set<number>();
 
   for (const msg of messages) {
-    if (assignedIds.has(msg.id)) continue;
-
-    const nearby = messages.filter(
-      m =>
-        !assignedIds.has(m.id) &&
-        haversineDistance(msg.lat, msg.lng, m.lat, m.lng) <= GROUP_RADIUS_METERS
+    const foundGroup = groupedMessages.find(group =>
+      haversineDistance(group.lat, group.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
     );
 
-    nearby.forEach(m => assignedIds.add(m.id));
-
-    if (nearby.length > 1) {
-      const avgLat = nearby.reduce((sum, m) => sum + m.lat, 0) / nearby.length;
-      const avgLng = nearby.reduce((sum, m) => sum + m.lng, 0) / nearby.length;
-      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: nearby });
+    if (foundGroup) {
+      foundGroup.messages.push(msg);
     } else {
-      ungroupedMessages.push(nearby[0]);
+      groupedMessages.push({
+        lat: msg.lat,
+        lng: msg.lng,
+        messages: [msg],
+      });
     }
   }
 
-  if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
+  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -116,20 +97,10 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 💬 Grouped messages */}
         {groupedMessages.map((group, i) => (
-          <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+          <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
             <Popup>
               <MessageList messages={group.messages} />
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* 🟢 Ungrouped messages */}
-        {ungroupedMessages.map((msg, i) => (
-          <Marker key={`solo-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon}>
-            <Popup>
-              <MessageList messages={[msg]} />
             </Popup>
           </Marker>
         ))}
@@ -147,15 +118,6 @@ export default function EventsMap() {
       <style>{`
         .custom-speech-bubble {
           font-size: 20px;
-          text-align: center;
-          line-height: 1;
-          user-select: none;
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        .custom-green-dot {
-          font-size: 18px;
           text-align: center;
           line-height: 1;
           user-select: none;
