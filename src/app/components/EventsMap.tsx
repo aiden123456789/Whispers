@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import type L from 'leaflet';
+import { DivIcon } from 'leaflet';
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -22,10 +22,15 @@ interface Whisper {
 }
 
 const MessageList = ({ messages }: { messages: Whisper[] }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   return (
-    <div className="space-y-2 max-h-48 overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
       {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt)
+        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
         .map(msg => (
           <div key={msg.id} className="text-sm p-1 border-b">
             <span className="block text-gray-600 text-xs">
@@ -52,11 +57,11 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 }
 
-function EventsMap() {
+export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
-  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<L.DivIcon | null>(null);
+  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -96,8 +101,8 @@ function EventsMap() {
 
   useEffect(() => {
     if (!center) return;
-    // Removed destructuring since lat/lng not used here
-    fetch('/api/messages')
+    const [lat, lng] = center;
+    fetch(`/api/messages?lat=${lat}&lng=${lng}`)
       .then(r => r.json())
       .then((data: Whisper[]) => setMessages(data))
       .catch(console.error);
@@ -160,23 +165,13 @@ function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {groupedMessages.map((group, i) => {
-          const distance = center
-            ? haversineDistance(center[0], center[1], group.lat, group.lng)
-            : Infinity;
-
-          return (
-            <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
-              <Popup>
-                {distance <= GROUP_RADIUS_METERS ? (
-                  <MessageList messages={group.messages} />
-                ) : (
-                  <div className="text-sm text-gray-600">Move closer to read these whispers.</div>
-                )}
-              </Popup>
-            </Marker>
-          );
-        })}
+        {groupedMessages.map((group, i) => (
+          <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+            <Popup>
+              <MessageList messages={group.messages} />
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
@@ -201,18 +196,4 @@ function EventsMap() {
       `}</style>
     </>
   );
-}
-
-export default function EventsMapWrapper() {
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isClient) {
-    return <p>Loading map…</p>;
-  }
-
-  return <EventsMap />;
 }
