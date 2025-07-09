@@ -157,7 +157,7 @@ export default function EventsMap() {
           box-shadow: none !important;
         }
         .custom-green-dot {
-          font-size: 28px;
+          font-size: 20px;
           text-align: center;
           line-height: 1;
           user-select: none;
