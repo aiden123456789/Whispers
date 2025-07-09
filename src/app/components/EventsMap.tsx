@@ -22,9 +22,8 @@ interface Whisper {
 }
 
 const MessageList = ({ messages }: { messages: Whisper[] }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   return (
-    <div ref={containerRef} className="space-y-2 max-h-48 overflow-y-auto">
+    <div className="space-y-2 max-h-48 overflow-y-auto">
       {[...messages]
         .sort((a, b) => b.createdAt - a.createdAt)
         .map(msg => (
@@ -61,23 +60,28 @@ export default function EventsMap() {
 
   useEffect(() => {
     import('leaflet').then(L => {
-      setSpeechBubbleIcon(
-        L.divIcon({
-          html: '💬',
-          className: 'custom-speech-bubble',
-          iconSize: [24, 24],
-          iconAnchor: [12, 24],
-        })
-      );
+      const speechIcon = L.divIcon({
+        html: '💬',
+        className: 'custom-speech-bubble',
+        iconSize: [24, 24],
+        iconAnchor: [12, 24],
+      });
 
-      setGreenDotIcon(
-        L.divIcon({
-          html: '🟢',
-          className: 'custom-green-dot',
-          iconSize: [24, 24],
-          iconAnchor: [12, 24],
-        })
-      );
+      const dotIcon = L.divIcon({
+        html: `<div style="
+          width: 16px;
+          height: 16px;
+          background-color: #28a745;
+          border-radius: 50%;
+          box-shadow: 0 0 6px #28a745;
+        "></div>`,
+        className: '',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+
+      setSpeechBubbleIcon(speechIcon);
+      setGreenDotIcon(dotIcon);
     });
   }, []);
 
@@ -116,6 +120,7 @@ export default function EventsMap() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
+
     const text = whisperInput.current?.value.trim() ?? '';
     if (!text) return;
 
@@ -131,10 +136,12 @@ export default function EventsMap() {
   }
 
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
+
   for (const msg of messages) {
     const foundGroup = groupedMessages.find(group =>
       haversineDistance(group.lat, group.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
     );
+
     if (foundGroup) {
       foundGroup.messages.push(msg);
     } else {
@@ -156,7 +163,12 @@ export default function EventsMap() {
         </div>
       )}
 
-      <MapContainer center={center} zoom={16} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
+      <MapContainer
+        center={center}
+        zoom={16}
+        scrollWheelZoom
+        style={{ height: '80vh', width: '100%' }}
+      >
         <TileLayer
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -168,11 +180,13 @@ export default function EventsMap() {
 
           return (
             <Marker key={i} position={[group.lat, group.lng]} icon={icon}>
-              {isNearby && (
-                <Popup>
+              <Popup>
+                {isNearby ? (
                   <MessageList messages={group.messages} />
-                </Popup>
-              )}
+                ) : (
+                  <div className="text-sm text-gray-500">Move closer to read these whispers.</div>
+                )}
+              </Popup>
             </Marker>
           );
         })}
@@ -188,7 +202,7 @@ export default function EventsMap() {
       </form>
 
       <style>{`
-        .custom-speech-bubble, .custom-green-dot {
+        .custom-speech-bubble {
           font-size: 20px;
           text-align: center;
           line-height: 1;
