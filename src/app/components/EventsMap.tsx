@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
+import type L from 'leaflet';
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -51,15 +52,13 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 }
 
-// Main map component (client-only)
 function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
-  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<any>(null);
+  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<L.DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  // Create speech bubble icon after leaflet loads (client-side)
   useEffect(() => {
     import('leaflet').then(L => {
       const icon = L.divIcon({
@@ -72,7 +71,6 @@ function EventsMap() {
     });
   }, []);
 
-  // Get geolocation
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeoError('Geolocation not supported');
@@ -96,10 +94,9 @@ function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  // Fetch messages whenever center updates
   useEffect(() => {
     if (!center) return;
-    const [lat, lng] = center;
+    // Removed destructuring since lat/lng not used here
     fetch('/api/messages')
       .then(r => r.json())
       .then((data: Whisper[]) => setMessages(data))
@@ -124,7 +121,6 @@ function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group messages by location proximity
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
 
   for (const msg of messages) {
@@ -207,7 +203,6 @@ function EventsMap() {
   );
 }
 
-// Wrapper component to render map only on client to avoid SSR issues
 export default function EventsMapWrapper() {
   const [isClient, setIsClient] = useState(false);
 
