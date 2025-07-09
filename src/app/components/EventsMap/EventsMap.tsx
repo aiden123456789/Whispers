@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react'; // ✅ Fix for JSX.Element type
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { DivIcon } from 'leaflet';
@@ -17,7 +16,7 @@ const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: f
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 200;
 
-export default function EventsMap(): JSX.Element {
+export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
@@ -80,7 +79,7 @@ export default function EventsMap(): JSX.Element {
       .catch(console.error);
   }, [center]);
 
-  async function handleSubmit(e: FormEvent): Promise<void> {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!center) return;
 
@@ -110,8 +109,6 @@ export default function EventsMap(): JSX.Element {
       const distance = haversineDistance(userLat, userLng, msg.lat, msg.lng);
       const isNear = distance <= GROUP_RADIUS_METERS;
       const isMine = msg.id === myMessageId;
-
-      console.debug(`Msg ID ${msg.id}: distance=${distance.toFixed(1)}m, isNear=${isNear}, isMine=${isMine}`);
 
       if (isMine) myMessage = msg;
       if (isNear) nearMessages.push(msg);
