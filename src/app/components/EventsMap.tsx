@@ -10,8 +10,8 @@ const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), 
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
-const GROUP_RADIUS_METERS = 30.48;
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
+const GROUP_RADIUS_METERS = 30.48; // 100 feet
 
 interface Whisper {
   id: number;
@@ -22,8 +22,13 @@ interface Whisper {
 }
 
 const MessageList = ({ messages }: { messages: Whisper[] }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   return (
-    <div className="space-y-2 max-h-48 overflow-y-auto">
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
       {[...messages]
         .sort((a, b) => b.createdAt - a.createdAt)
         .map(msg => (
@@ -43,9 +48,11 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   const toRad = (x: number) => (x * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
+
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -67,21 +74,22 @@ export default function EventsMap() {
         iconAnchor: [12, 24],
       });
 
-      const dotIcon = L.divIcon({
+      const greenIcon = L.divIcon({
         html: `<div style="
-          width: 16px;
-          height: 16px;
-          background-color: #28a745;
+          width: 14px;
+          height: 14px;
+          background: green;
+          border: 2px solid white;
           border-radius: 50%;
-          box-shadow: 0 0 6px #28a745;
+          box-shadow: 0 0 6px green;
         "></div>`,
         className: '',
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
       });
 
       setSpeechBubbleIcon(speechIcon);
-      setGreenDotIcon(dotIcon);
+      setGreenDotIcon(greenIcon);
     });
   }, []);
 
@@ -184,7 +192,9 @@ export default function EventsMap() {
                 {isNearby ? (
                   <MessageList messages={group.messages} />
                 ) : (
-                  <div className="text-sm text-gray-500">Move closer to read these whispers.</div>
+                  <div className="text-center text-sm text-gray-600 p-2">
+                    Move closer to read these whispers.
+                  </div>
                 )}
               </Popup>
             </Marker>
