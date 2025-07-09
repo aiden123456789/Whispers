@@ -24,6 +24,7 @@ export default function EventsMap() {
   const whisperInput = useRef<HTMLInputElement>(null);
   const [myMessageId, setMyMessageId] = useState<number | null>(null);
 
+  // Load icons
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
@@ -45,15 +46,28 @@ export default function EventsMap() {
     });
   }, []);
 
+  // Load messages
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
       .then(r => r.json())
-      .then((data: Whisper[]) => setMessages(data))
+      .then((data: Whisper[]) => {
+        setMessages([
+          ...data,
+          {
+            id: 9999,
+            text: "Far away test message",
+            lat: lat + 0.01, // ~1km away
+            lng: lng + 0.01,
+            created_at: new Date().toISOString(),
+          }
+        ]);
+      })
       .catch(console.error);
   }, [center]);
 
+  // Submit handler
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -73,6 +87,7 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
+  // Separate near vs far messages
   const nearMessages: Whisper[] = [];
   const farMessages: Whisper[] = [];
   let myMessage: Whisper | null = null;
@@ -81,34 +96,38 @@ export default function EventsMap() {
     const [userLat, userLng] = center;
 
     for (const msg of messages) {
-      const isNearUser = haversineDistance(userLat, userLng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS;
+      const isNear = haversineDistance(userLat, userLng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS;
       const isMine = msg.id === myMessageId;
 
       if (isMine) {
         myMessage = msg;
       }
 
-      if (isNearUser) {
+      if (isNear) {
         nearMessages.push(msg);
       } else if (!isMine) {
-        farMessages.push(msg); // not near, not mine
+        farMessages.push(msg);
       }
     }
   }
 
-  // Merge my message into nearby group if it's not already there
+  // Merge own message if needed
   const groupMessages = [...nearMessages];
   if (myMessage && !groupMessages.some(m => m.id === myMessage.id)) {
     groupMessages.push(myMessage);
   }
 
-  // Compute cluster center
+  // Cluster center for 💬 marker
   const clusterLat = groupMessages.length > 0
     ? groupMessages.reduce((sum, m) => sum + m.lat, 0) / groupMessages.length
     : 0;
   const clusterLng = groupMessages.length > 0
     ? groupMessages.reduce((sum, m) => sum + m.lng, 0) / groupMessages.length
     : 0;
+
+  console.log('center:', center);
+  console.log('groupMessages:', groupMessages);
+  console.log('farMessages:', farMessages);
 
   if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
@@ -120,13 +139,13 @@ export default function EventsMap() {
         </div>
       )}
 
-      <MapContainer center={center} zoom={16} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
+      <MapContainer center={center} zoom={14} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
         <TileLayer
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 💬 Speech bubble for local messages (including own) */}
+        {/* 💬 Cluster of nearby or own messages */}
         {groupMessages.length > 0 && (
           <Marker position={[clusterLat, clusterLng]} icon={speechBubbleIcon}>
             <Popup>
@@ -135,7 +154,7 @@ export default function EventsMap() {
           </Marker>
         )}
 
-        {/* 🟢 Green dots for faraway messages */}
+        {/* 🟢 Faraway messages */}
         {farMessages.map((msg, i) => (
           <Marker key={`green-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
         ))}
@@ -161,13 +180,14 @@ export default function EventsMap() {
           box-shadow: none !important;
         }
         .custom-green-dot {
-          font-size: 18px;
+          font-size: 28px;
           text-align: center;
           line-height: 1;
           user-select: none;
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
+          background: white !important;
+          border: 2px solid green !important;
+          border-radius: 50% !important;
+          box-shadow: 0 0 6px rgba(0, 255, 0, 0.9) !important;
         }
       `}</style>
     </>
