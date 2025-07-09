@@ -11,7 +11,7 @@ import { useGeolocation } from './useGeolocation';
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
-const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
+const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false }); // <-- Add this
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 30.48;
@@ -22,8 +22,8 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
+  const [myMessageId, setMyMessageId] = useState<number | null>(null);
 
-  // Setup icons
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
@@ -45,7 +45,6 @@ export default function EventsMap() {
     });
   }, []);
 
-  // Load messages near center
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
@@ -55,7 +54,6 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
-  // Handle submission
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -71,33 +69,47 @@ export default function EventsMap() {
     });
     const newWhisper = await res.json();
     setMessages(prev => [...prev, newWhisper]);
+    setMyMessageId(newWhisper.id);
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group messages (only clusters of 2+) and identify ungrouped
+  // Build user-local group (including their own message)
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
-  const groupedIds = new Set<number>();
+  const groupSet = new Set<number>();
+  const ungroupedMessages: Whisper[] = [];
 
-  for (const msg of messages) {
-    if (groupedIds.has(msg.id)) continue;
+  if (center) {
+    const [lat, lng] = center;
 
-    const group = messages.filter(
-      other =>
-        !groupedIds.has(other.id) &&
-        haversineDistance(msg.lat, msg.lng, other.lat, other.lng) <= GROUP_RADIUS_METERS
+    const nearby = messages.filter(
+      msg => haversineDistance(lat, lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
     );
 
-    if (group.length > 1) {
-      group.forEach(m => groupedIds.add(m.id));
+    if (nearby.length > 0) {
+      nearby.forEach(msg => groupSet.add(msg.id));
 
-      const avgLat = group.reduce((sum, m) => sum + m.lat, 0) / group.length;
-      const avgLng = group.reduce((sum, m) => sum + m.lng, 0) / group.length;
+      const avgLat = nearby.reduce((sum, msg) => sum + msg.lat, 0) / nearby.length;
+      const avgLng = nearby.reduce((sum, msg) => sum + msg.lng, 0) / nearby.length;
 
-      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: group });
+      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: nearby });
+    }
+
+    // Ensure user's message is included even if it was alone
+    if (myMessageId !== null && !groupSet.has(myMessageId)) {
+      const mine = messages.find(msg => msg.id === myMessageId);
+      if (mine) {
+        groupSet.add(mine.id);
+        groupedMessages.push({ lat: mine.lat, lng: mine.lng, messages: [mine] });
+      }
+    }
+
+    // Everything else is an ungrouped green dot
+    for (const msg of messages) {
+      if (!groupSet.has(msg.id)) {
+        ungroupedMessages.push(msg);
+      }
     }
   }
-
-  const ungroupedMessages = messages.filter(msg => !groupedIds.has(msg.id));
 
   if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
@@ -115,7 +127,7 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Grouped 💬 messages */}
+        {/* 💬 Nearby or user's own messages */}
         {groupedMessages.map((group, i) => (
           <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
             <Popup>
@@ -124,13 +136,9 @@ export default function EventsMap() {
           </Marker>
         ))}
 
-        {/* Ungrouped 🟢 messages */}
+        {/* 🟢 Faraway messages – no popup */}
         {ungroupedMessages.map((msg, i) => (
-          <Marker key={`solo-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon}>
-            <Popup>
-              <MessageList messages={[msg]} />
-            </Popup>
-          </Marker>
+          <Marker key={`dot-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
         ))}
       </MapContainer>
 
