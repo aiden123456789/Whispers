@@ -73,25 +73,36 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  const groupMessages: Whisper[] = [];
-  const greenDotMessages: Whisper[] = [];
+  const nearMessages: Whisper[] = [];
+  const farMessages: Whisper[] = [];
+  let myMessage: Whisper | null = null;
 
   if (center) {
     const [userLat, userLng] = center;
 
     for (const msg of messages) {
       const isNearUser = haversineDistance(userLat, userLng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS;
-      const isMyMessage = msg.id === myMessageId;
+      const isMine = msg.id === myMessageId;
 
-      if (isNearUser || isMyMessage) {
-        groupMessages.push(msg);
-      } else {
-        greenDotMessages.push(msg);
+      if (isMine) {
+        myMessage = msg;
+      }
+
+      if (isNearUser) {
+        nearMessages.push(msg);
+      } else if (!isMine) {
+        farMessages.push(msg); // not near, not mine
       }
     }
   }
 
-  // Group messages into a single cluster (💬)
+  // Merge my message into nearby group if it's not already there
+  const groupMessages = [...nearMessages];
+  if (myMessage && !groupMessages.some(m => m.id === myMessage.id)) {
+    groupMessages.push(myMessage);
+  }
+
+  // Compute cluster center
   const clusterLat = groupMessages.length > 0
     ? groupMessages.reduce((sum, m) => sum + m.lat, 0) / groupMessages.length
     : 0;
@@ -115,6 +126,7 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        {/* 💬 Speech bubble for local messages (including own) */}
         {groupMessages.length > 0 && (
           <Marker position={[clusterLat, clusterLng]} icon={speechBubbleIcon}>
             <Popup>
@@ -123,7 +135,8 @@ export default function EventsMap() {
           </Marker>
         )}
 
-        {greenDotMessages.map((msg, i) => (
+        {/* 🟢 Green dots for faraway messages */}
+        {farMessages.map((msg, i) => (
           <Marker key={`green-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
         ))}
       </MapContainer>
