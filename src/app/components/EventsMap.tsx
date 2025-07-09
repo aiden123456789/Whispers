@@ -62,17 +62,34 @@ export default function EventsMap() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
+  const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     import('leaflet').then(L => {
-      const icon = L.divIcon({
+      const speechIcon = L.divIcon({
         html: '💬',
         className: 'custom-speech-bubble',
         iconSize: [24, 24],
         iconAnchor: [12, 24],
       });
-      setSpeechBubbleIcon(icon);
+
+      const dotIcon = L.divIcon({
+        html: `<div style="
+          width: 16px; 
+          height: 16px; 
+          background-color: #28a745; 
+          border: 3px solid white; 
+          border-radius: 50%; 
+          box-shadow: 0 0 6px #28a745;
+        "></div>`,
+        className: '', // no default styles to override
+        iconSize: [22, 22],
+        iconAnchor: [11, 11], // center the dot exactly on location
+      });
+
+      setSpeechBubbleIcon(speechIcon);
+      setGreenDotIcon(dotIcon);
     });
   }, []);
 
@@ -144,7 +161,7 @@ export default function EventsMap() {
     }
   }
 
-  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
+  if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -165,13 +182,28 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {groupedMessages.map((group, i) => (
-          <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
-            <Popup>
-              <MessageList messages={group.messages} />
-            </Popup>
-          </Marker>
-        ))}
+        {groupedMessages.map((group, i) => {
+          const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
+          const isNearby = distance <= GROUP_RADIUS_METERS;
+
+          return (
+            <Marker
+              key={i}
+              position={[group.lat, group.lng]}
+              icon={isNearby ? speechBubbleIcon : greenDotIcon}
+            >
+              <Popup>
+                {isNearby ? (
+                  <MessageList messages={group.messages} />
+                ) : (
+                  <div className="text-center text-sm text-gray-600 p-2">
+                    Move closer to read these whispers.
+                  </div>
+                )}
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
