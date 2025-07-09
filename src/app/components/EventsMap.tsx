@@ -11,7 +11,7 @@ const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr:
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
-const GROUP_RADIUS_METERS = 30.48; // 100 feet
+const GROUP_RADIUS_METERS = 30.48;
 
 interface Whisper {
   id: number;
@@ -21,27 +21,20 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = ({ messages }: { messages: Whisper[] }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <div
-      ref={containerRef}
-      className="space-y-2 max-h-48 overflow-y-auto"
-    >
-      {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
-        .map(msg => (
-          <div key={msg.id} className="text-sm p-1 border-b">
-            <span className="block text-gray-600 text-xs">
-              {new Date(msg.createdAt).toLocaleTimeString()}
-            </span>
-            <span>{msg.text}</span>
-          </div>
-        ))}
-    </div>
-  );
-};
+const MessageList = ({ messages }: { messages: Whisper[] }) => (
+  <div className="space-y-2 max-h-48 overflow-y-auto">
+    {[...messages]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(msg => (
+        <div key={msg.id} className="text-sm p-1 border-b">
+          <span className="block text-gray-600 text-xs">
+            {new Date(msg.createdAt).toLocaleTimeString()}
+          </span>
+          <span>{msg.text}</span>
+        </div>
+      ))}
+  </div>
+);
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371e3;
@@ -66,13 +59,12 @@ export default function EventsMap() {
 
   useEffect(() => {
     import('leaflet').then(L => {
-      const icon = L.divIcon({
+      setSpeechBubbleIcon(L.divIcon({
         html: '💬',
         className: 'custom-speech-bubble',
         iconSize: [24, 24],
         iconAnchor: [12, 24],
-      });
-      setSpeechBubbleIcon(icon);
+      }));
     });
   }, []);
 
@@ -127,6 +119,7 @@ export default function EventsMap() {
   }
 
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
+  const distantMessages: Whisper[] = [];
 
   for (const msg of messages) {
     const foundGroup = groupedMessages.find(group =>
@@ -135,12 +128,10 @@ export default function EventsMap() {
 
     if (foundGroup) {
       foundGroup.messages.push(msg);
+    } else if (center && haversineDistance(center[0], center[1], msg.lat, msg.lng) <= GROUP_RADIUS_METERS) {
+      groupedMessages.push({ lat: msg.lat, lng: msg.lng, messages: [msg] });
     } else {
-      groupedMessages.push({
-        lat: msg.lat,
-        lng: msg.lng,
-        messages: [msg],
-      });
+      distantMessages.push(msg);
     }
   }
 
@@ -166,11 +157,24 @@ export default function EventsMap() {
         />
 
         {groupedMessages.map((group, i) => (
-          <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+          <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
             <Popup>
               <MessageList messages={group.messages} />
             </Popup>
           </Marker>
+        ))}
+
+        {distantMessages.map((msg, i) => (
+          <Marker
+            key={`distant-${i}`}
+            position={[msg.lat, msg.lng]}
+            icon={new DivIcon({
+              html: `<div style="width: 14px; height: 14px; background: green; border-radius: 50%; box-shadow: 0 0 4px green;"></div>`,
+              className: '',
+              iconSize: [14, 14],
+              iconAnchor: [7, 7],
+            })}
+          />
         ))}
       </MapContainer>
 
