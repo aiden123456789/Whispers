@@ -48,9 +48,12 @@ export default function EventsMap() {
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
+
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
       .then(res => res.json())
       .then((data: Whisper[]) => {
+        console.log('[DEBUG] API messages:', data);
+
         const fakeMessages: Whisper[] = [
           {
             id: 9999,
@@ -74,7 +77,12 @@ export default function EventsMap() {
             createdAt: Date.now(),
           },
         ];
+
+        // Uncomment if you want to test fake far messages:
         setMessages([...data, ...fakeMessages]);
+
+        // Use this if you're done testing:
+        // setMessages(data);
       })
       .catch(console.error);
   }, [center]);
@@ -106,6 +114,8 @@ export default function EventsMap() {
     const [userLat, userLng] = center;
 
     for (const msg of messages) {
+      if (msg.lat == null || msg.lng == null) continue;
+
       const distance = haversineDistance(userLat, userLng, msg.lat, msg.lng);
       const isNear = distance <= GROUP_RADIUS_METERS;
       const isMine = msg.id === myMessageId;
@@ -114,6 +124,8 @@ export default function EventsMap() {
       if (isNear) nearMessages.push(msg);
       else if (!isMine) farMessages.push(msg);
     }
+
+    console.log('[DEBUG] near:', nearMessages.length, 'far:', farMessages.length);
   }
 
   const groupMessages = [...nearMessages];
