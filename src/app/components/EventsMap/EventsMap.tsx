@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react'; // ✅ Fix for JSX.Element type
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { DivIcon } from 'leaflet';
@@ -14,7 +15,6 @@ const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr:
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
-// Increased radius for testing
 const GROUP_RADIUS_METERS = 200;
 
 export default function EventsMap(): JSX.Element {
@@ -25,7 +25,6 @@ export default function EventsMap(): JSX.Element {
   const whisperInput = useRef<HTMLInputElement>(null);
   const [myMessageId, setMyMessageId] = useState<number | null>(null);
 
-  // Load icons once
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
@@ -47,14 +46,12 @@ export default function EventsMap(): JSX.Element {
     });
   }, []);
 
-  // Fetch messages whenever center changes
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
       .then(res => res.json())
       .then((data: Whisper[]) => {
-        // Add multiple far away test messages
         const fakeMessages: Whisper[] = [
           {
             id: 9999,
@@ -83,7 +80,6 @@ export default function EventsMap(): JSX.Element {
       .catch(console.error);
   }, [center]);
 
-  // Submit handler
   async function handleSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (!center) return;
@@ -103,7 +99,6 @@ export default function EventsMap(): JSX.Element {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Separate near vs far messages with debug logs
   const nearMessages: Whisper[] = [];
   const farMessages: Whisper[] = [];
   let myMessage: Whisper | null = null;
@@ -124,13 +119,11 @@ export default function EventsMap(): JSX.Element {
     }
   }
 
-  // Merge own message into near group if missing
   const groupMessages = [...nearMessages];
   if (myMessage && !groupMessages.some(m => m.id === myMessage.id)) {
     groupMessages.push(myMessage);
   }
 
-  // Calculate cluster center for 💬 marker
   const clusterLat = groupMessages.length > 0
     ? groupMessages.reduce((sum, m) => sum + m.lat, 0) / groupMessages.length
     : 0;
@@ -154,7 +147,6 @@ export default function EventsMap(): JSX.Element {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 💬 Cluster of nearby or own messages */}
         {groupMessages.length > 0 && (
           <Marker position={[clusterLat, clusterLng]} icon={speechBubbleIcon}>
             <Popup>
@@ -163,7 +155,6 @@ export default function EventsMap(): JSX.Element {
           </Marker>
         )}
 
-        {/* 🟢 Faraway messages */}
         {farMessages.map((msg, i) => (
           <Marker key={`green-${msg.id ?? i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
         ))}
