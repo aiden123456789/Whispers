@@ -60,6 +60,7 @@ export default function EventsMap() {
   const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
+  // Create Leaflet DivIcons for speech bubble and green dot
   useEffect(() => {
     import('leaflet').then(L => {
       const speechIcon = L.divIcon({
@@ -80,6 +81,7 @@ export default function EventsMap() {
     });
   }, []);
 
+  // Track user geolocation
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeoError('Geolocation not supported');
@@ -103,6 +105,7 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
+  // Fetch messages near current center
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
@@ -112,6 +115,7 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
+  // Handle form submission to post new whisper
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -130,24 +134,29 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
+  // Group messages that are within GROUP_RADIUS_METERS of each other
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
   const ungroupedMessages: Whisper[] = [];
+  const assignedIds = new Set<number>();
 
   for (const msg of messages) {
-    const foundGroup = groupedMessages.find(group =>
-      haversineDistance(group.lat, group.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
+    if (assignedIds.has(msg.id)) continue;
+
+    const nearbyGroup = messages.filter(
+      m =>
+        !assignedIds.has(m.id) &&
+        haversineDistance(msg.lat, msg.lng, m.lat, m.lng) <= GROUP_RADIUS_METERS
     );
-    if (foundGroup) {
-      foundGroup.messages.push(msg);
+
+    nearbyGroup.forEach(m => assignedIds.add(m.id));
+
+    if (nearbyGroup.length > 1) {
+      // Compute average location for the group marker
+      const avgLat = nearbyGroup.reduce((sum, m) => sum + m.lat, 0) / nearbyGroup.length;
+      const avgLng = nearbyGroup.reduce((sum, m) => sum + m.lng, 0) / nearbyGroup.length;
+      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: nearbyGroup });
     } else {
-      const nearAny = messages.some(
-        m => m.id !== msg.id && haversineDistance(m.lat, m.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
-      );
-      if (nearAny) {
-        groupedMessages.push({ lat: msg.lat, lng: msg.lng, messages: [msg] });
-      } else {
-        ungroupedMessages.push(msg);
-      }
+      ungroupedMessages.push(nearbyGroup[0]);
     }
   }
 
@@ -161,18 +170,13 @@ export default function EventsMap() {
         </div>
       )}
 
-      <MapContainer
-        center={center}
-        zoom={16}
-        scrollWheelZoom
-        style={{ height: '80vh', width: '100%' }}
-      >
+      <MapContainer center={center} zoom={16} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
         <TileLayer
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 💬 Grouped messages */}
+        {/* Grouped messages as speech bubbles */}
         {groupedMessages.map((group, i) => (
           <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
             <Popup>
@@ -181,7 +185,7 @@ export default function EventsMap() {
           </Marker>
         ))}
 
-        {/* 🟢 Ungrouped single-message dots */}
+        {/* Single ungrouped messages as green dots */}
         {ungroupedMessages.map((msg, i) => (
           <Marker key={`solo-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon}>
             <Popup>
