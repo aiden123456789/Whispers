@@ -11,7 +11,7 @@ import { useGeolocation } from './useGeolocation';
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
-const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false }); // <-- Add this
+const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 30.48;
@@ -73,43 +73,31 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Build user-local group (including their own message)
-  const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
-  const groupSet = new Set<number>();
-  const ungroupedMessages: Whisper[] = [];
+  const groupMessages: Whisper[] = [];
+  const greenDotMessages: Whisper[] = [];
 
   if (center) {
-    const [lat, lng] = center;
+    const [userLat, userLng] = center;
 
-    const nearby = messages.filter(
-      msg => haversineDistance(lat, lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
-    );
-
-    if (nearby.length > 0) {
-      nearby.forEach(msg => groupSet.add(msg.id));
-
-      const avgLat = nearby.reduce((sum, msg) => sum + msg.lat, 0) / nearby.length;
-      const avgLng = nearby.reduce((sum, msg) => sum + msg.lng, 0) / nearby.length;
-
-      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: nearby });
-    }
-
-    // Ensure user's message is included even if it was alone
-    if (myMessageId !== null && !groupSet.has(myMessageId)) {
-      const mine = messages.find(msg => msg.id === myMessageId);
-      if (mine) {
-        groupSet.add(mine.id);
-        groupedMessages.push({ lat: mine.lat, lng: mine.lng, messages: [mine] });
-      }
-    }
-
-    // Everything else is an ungrouped green dot
     for (const msg of messages) {
-      if (!groupSet.has(msg.id)) {
-        ungroupedMessages.push(msg);
+      const isNearUser = haversineDistance(userLat, userLng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS;
+      const isMyMessage = msg.id === myMessageId;
+
+      if (isNearUser || isMyMessage) {
+        groupMessages.push(msg);
+      } else {
+        greenDotMessages.push(msg);
       }
     }
   }
+
+  // Group messages into a single cluster (💬)
+  const clusterLat = groupMessages.length > 0
+    ? groupMessages.reduce((sum, m) => sum + m.lat, 0) / groupMessages.length
+    : 0;
+  const clusterLng = groupMessages.length > 0
+    ? groupMessages.reduce((sum, m) => sum + m.lng, 0) / groupMessages.length
+    : 0;
 
   if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
@@ -127,18 +115,16 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* 💬 Nearby or user's own messages */}
-        {groupedMessages.map((group, i) => (
-          <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+        {groupMessages.length > 0 && (
+          <Marker position={[clusterLat, clusterLng]} icon={speechBubbleIcon}>
             <Popup>
-              <MessageList messages={group.messages} />
+              <MessageList messages={groupMessages} />
             </Popup>
           </Marker>
-        ))}
+        )}
 
-        {/* 🟢 Faraway messages – no popup */}
-        {ungroupedMessages.map((msg, i) => (
-          <Marker key={`dot-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
+        {greenDotMessages.map((msg, i) => (
+          <Marker key={`green-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
         ))}
       </MapContainer>
 
