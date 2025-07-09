@@ -58,7 +58,7 @@ export default function EventsMap() {
           text: "Far away test message",
           lat: lat + 0.01,
           lng: lng + 0.01,
-          created_at: new Date().toISOString(),
+          createdAt: new Date().toISOString(), // ✅ Corrected to camelCase
         };
         setMessages([...data, fakeMessage]);
       })
@@ -111,7 +111,7 @@ export default function EventsMap() {
 
   // Merge own message if needed
   const groupMessages = [...nearMessages];
-  if (myMessage && !groupMessages.some(m => m.id === myMessage.id)) {
+  if (myMessage && !groupMessages.some(m => m.id === myMessage!.id)) {
     groupMessages.push(myMessage);
   }
 
