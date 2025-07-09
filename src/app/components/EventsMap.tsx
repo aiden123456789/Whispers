@@ -21,38 +21,29 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = ({ messages }: { messages: Whisper[] }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <div
-      ref={containerRef}
-      className="space-y-2 max-h-48 overflow-y-auto"
-    >
-      {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
-        .map(msg => (
-          <div key={msg.id} className="text-sm p-1 border-b">
-            <span className="block text-gray-600 text-xs">
-              {new Date(msg.createdAt).toLocaleTimeString()}
-            </span>
-            <span>{msg.text}</span>
-          </div>
-        ))}
-    </div>
-  );
-};
+const MessageList = ({ messages }: { messages: Whisper[] }) => (
+  <div className="space-y-2 max-h-48 overflow-y-auto">
+    {[...messages]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map(msg => (
+        <div key={msg.id} className="text-sm p-1 border-b">
+          <span className="block text-gray-600 text-xs">
+            {new Date(msg.createdAt).toLocaleTimeString()}
+          </span>
+          <span>{msg.text}</span>
+        </div>
+      ))}
+  </div>
+);
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371e3;
   const toRad = (x: number) => (x * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -67,29 +58,22 @@ export default function EventsMap() {
 
   useEffect(() => {
     import('leaflet').then(L => {
-      const speechIcon = L.divIcon({
-        html: '💬',
-        className: 'custom-speech-bubble',
-        iconSize: [24, 24],
-        iconAnchor: [12, 24],
-      });
-
-      const dotIcon = L.divIcon({
-        html: `<div style="
-          width: 16px; 
-          height: 16px; 
-          background-color: #28a745; 
-          border: 3px solid white; 
-          border-radius: 50%; 
-          box-shadow: 0 0 6px #28a745;
-        "></div>`,
-        className: '', // no default styles to override
-        iconSize: [22, 22],
-        iconAnchor: [11, 11], // center the dot exactly on location
-      });
-
-      setSpeechBubbleIcon(speechIcon);
-      setGreenDotIcon(dotIcon);
+      setSpeechBubbleIcon(
+        L.divIcon({
+          html: '💬',
+          className: 'custom-speech-bubble',
+          iconSize: [24, 24],
+          iconAnchor: [12, 24],
+        })
+      );
+      setGreenDotIcon(
+        L.divIcon({
+          html: '💚',
+          className: 'custom-green-dot',
+          iconSize: [24, 24],
+          iconAnchor: [12, 24],
+        })
+      );
     });
   }, []);
 
@@ -128,7 +112,6 @@ export default function EventsMap() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
-
     const text = whisperInput.current?.value.trim() ?? '';
     if (!text) return;
 
@@ -144,12 +127,10 @@ export default function EventsMap() {
   }
 
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
-
   for (const msg of messages) {
     const foundGroup = groupedMessages.find(group =>
       haversineDistance(group.lat, group.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
     );
-
     if (foundGroup) {
       foundGroup.messages.push(msg);
     } else {
@@ -183,8 +164,8 @@ export default function EventsMap() {
         />
 
         {groupedMessages.map((group, i) => {
-          const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
-          const isNearby = distance <= GROUP_RADIUS_METERS;
+          const isNearby =
+            haversineDistance(center[0], center[1], group.lat, group.lng) <= GROUP_RADIUS_METERS;
 
           return (
             <Marker
@@ -192,15 +173,11 @@ export default function EventsMap() {
               position={[group.lat, group.lng]}
               icon={isNearby ? speechBubbleIcon : greenDotIcon}
             >
-              <Popup>
-                {isNearby ? (
+              {isNearby && (
+                <Popup>
                   <MessageList messages={group.messages} />
-                ) : (
-                  <div className="text-center text-sm text-gray-600 p-2">
-                    Move closer to read these whispers.
-                  </div>
-                )}
-              </Popup>
+                </Popup>
+              )}
             </Marker>
           );
         })}
@@ -217,6 +194,15 @@ export default function EventsMap() {
 
       <style>{`
         .custom-speech-bubble {
+          font-size: 20px;
+          text-align: center;
+          line-height: 1;
+          user-select: none;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .custom-green-dot {
           font-size: 20px;
           text-align: center;
           line-height: 1;
