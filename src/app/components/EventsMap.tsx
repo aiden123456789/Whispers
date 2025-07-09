@@ -10,7 +10,7 @@ const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), 
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
 const GROUP_RADIUS_METERS = 30.48; // 100 feet
 
 interface Whisper {
@@ -21,42 +21,58 @@ interface Whisper {
   createdAt: number;
 }
 
+const MessageList = ({ messages }: { messages: Whisper[] }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={containerRef}
+      className="space-y-2 max-h-48 overflow-y-auto"
+    >
+      {[...messages]
+        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
+        .map(msg => (
+          <div key={msg.id} className="text-sm p-1 border-b">
+            <span className="block text-gray-600 text-xs">
+              {new Date(msg.createdAt).toLocaleTimeString()}
+            </span>
+            <span>{msg.text}</span>
+          </div>
+        ))}
+    </div>
+  );
+};
+
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
-  const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     import('leaflet').then(L => {
-      const speechIcon = L.divIcon({
+      const icon = L.divIcon({
         html: '💬',
         className: 'custom-speech-bubble',
         iconSize: [24, 24],
         iconAnchor: [12, 24],
       });
-
-      // VERY SIMPLE green dot div with inline styles
-      const dotIcon = L.divIcon({
-        html: `<div style="
-          width: 16px; 
-          height: 16px; 
-          background-color: #28a745; 
-          border: 2px solid white; 
-          border-radius: 50%; 
-          box-shadow: 0 0 8px 2px #28a745;
-          display: block;
-        "></div>`,
-        className: '', // no default styles overriding
-        iconSize: [20, 20],
-        iconAnchor: [10, 10], // center exactly
-      });
-
-      setSpeechBubbleIcon(speechIcon);
-      setGreenDotIcon(dotIcon);
-      console.log('Icons set:', { speechIcon, dotIcon });
+      setSpeechBubbleIcon(icon);
     });
   }, []);
 
@@ -128,10 +144,7 @@ export default function EventsMap() {
     }
   }
 
-  if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
-
-  // Debug log
-  console.log('Rendering markers, groupedMessages:', groupedMessages);
+  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -152,31 +165,13 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {groupedMessages.map((group, i) => {
-          const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
-          const isNearby = distance <= GROUP_RADIUS_METERS;
-
-          // Debug to confirm which icon is used
-          console.log(`Marker ${i}: isNearby=${isNearby} distance=${distance.toFixed(1)}m`);
-
-          return (
-            <Marker
-              key={i}
-              position={[group.lat, group.lng]}
-              icon={isNearby ? speechBubbleIcon : greenDotIcon}
-            >
-              <Popup>
-                {isNearby ? (
-                  <MessageList messages={group.messages} />
-                ) : (
-                  <div className="text-center text-sm text-gray-600 p-2">
-                    Move closer to read these whispers.
-                  </div>
-                )}
-              </Popup>
-            </Marker>
-          );
-        })}
+        {groupedMessages.map((group, i) => (
+          <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+            <Popup>
+              <MessageList messages={group.messages} />
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
@@ -201,18 +196,4 @@ export default function EventsMap() {
       `}</style>
     </>
   );
-}
-
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371e3;
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
