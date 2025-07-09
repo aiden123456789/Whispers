@@ -23,6 +23,7 @@ export default function EventsMap() {
   const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
+  // Set up custom icons
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
@@ -45,9 +46,9 @@ export default function EventsMap() {
     });
   }, []);
 
+  // Load nearby messages
   useEffect(() => {
     if (!center) return;
-
     const [lat, lng] = center;
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
       .then(r => r.json())
@@ -55,6 +56,7 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
+  // Handle message submission
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
