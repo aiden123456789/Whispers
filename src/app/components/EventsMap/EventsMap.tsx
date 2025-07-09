@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { DivIcon } from 'leaflet';
 import { Whisper } from './types';
@@ -14,9 +14,10 @@ const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr:
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
-const GROUP_RADIUS_METERS = 30.48;
+// Increased radius for testing
+const GROUP_RADIUS_METERS = 200;
 
-export default function EventsMap() {
+export default function EventsMap(): JSX.Element {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
@@ -24,7 +25,7 @@ export default function EventsMap() {
   const whisperInput = useRef<HTMLInputElement>(null);
   const [myMessageId, setMyMessageId] = useState<number | null>(null);
 
-  // Load icons
+  // Load icons once
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
@@ -46,27 +47,44 @@ export default function EventsMap() {
     });
   }, []);
 
-  // Load messages
+  // Fetch messages whenever center changes
   useEffect(() => {
     if (!center) return;
     const [lat, lng] = center;
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
-      .then(r => r.json())
+      .then(res => res.json())
       .then((data: Whisper[]) => {
-        const fakeMessage: Whisper = {
-          id: 9999,
-          text: "Far away test message",
-          lat: lat + 0.01,
-          lng: lng + 0.01,
-          createdAt: Date.now(), // ✅ FIXED: Use number timestamp
-        };
-        setMessages([...data, fakeMessage]);
+        // Add multiple far away test messages
+        const fakeMessages: Whisper[] = [
+          {
+            id: 9999,
+            text: "Far away test message 1",
+            lat: lat + 0.01,
+            lng: lng + 0.01,
+            createdAt: Date.now(),
+          },
+          {
+            id: 10000,
+            text: "Far away test message 2",
+            lat: lat + 0.015,
+            lng: lng - 0.02,
+            createdAt: Date.now(),
+          },
+          {
+            id: 10001,
+            text: "Far away test message 3",
+            lat: lat - 0.02,
+            lng: lng + 0.018,
+            createdAt: Date.now(),
+          },
+        ];
+        setMessages([...data, ...fakeMessages]);
       })
       .catch(console.error);
   }, [center]);
 
   // Submit handler
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     if (!center) return;
 
@@ -79,13 +97,13 @@ export default function EventsMap() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, lat, lng }),
     });
-    const newWhisper = await res.json();
+    const newWhisper: Whisper = await res.json();
     setMessages(prev => [...prev, newWhisper]);
     setMyMessageId(newWhisper.id);
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Separate near vs far messages
+  // Separate near vs far messages with debug logs
   const nearMessages: Whisper[] = [];
   const farMessages: Whisper[] = [];
   let myMessage: Whisper | null = null;
@@ -94,28 +112,25 @@ export default function EventsMap() {
     const [userLat, userLng] = center;
 
     for (const msg of messages) {
-      const isNear = haversineDistance(userLat, userLng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS;
+      const distance = haversineDistance(userLat, userLng, msg.lat, msg.lng);
+      const isNear = distance <= GROUP_RADIUS_METERS;
       const isMine = msg.id === myMessageId;
 
-      if (isMine) {
-        myMessage = msg;
-      }
+      console.debug(`Msg ID ${msg.id}: distance=${distance.toFixed(1)}m, isNear=${isNear}, isMine=${isMine}`);
 
-      if (isNear) {
-        nearMessages.push(msg);
-      } else if (!isMine) {
-        farMessages.push(msg);
-      }
+      if (isMine) myMessage = msg;
+      if (isNear) nearMessages.push(msg);
+      else if (!isMine) farMessages.push(msg);
     }
   }
 
-  // Merge own message if needed
+  // Merge own message into near group if missing
   const groupMessages = [...nearMessages];
-  if (myMessage && !groupMessages.some(m => m.id === myMessage!.id)) {
+  if (myMessage && !groupMessages.some(m => m.id === myMessage.id)) {
     groupMessages.push(myMessage);
   }
 
-  // Cluster center for 💬 marker
+  // Calculate cluster center for 💬 marker
   const clusterLat = groupMessages.length > 0
     ? groupMessages.reduce((sum, m) => sum + m.lat, 0) / groupMessages.length
     : 0;
@@ -150,7 +165,7 @@ export default function EventsMap() {
 
         {/* 🟢 Faraway messages */}
         {farMessages.map((msg, i) => (
-          <Marker key={`green-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
+          <Marker key={`green-${msg.id ?? i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
         ))}
       </MapContainer>
 
