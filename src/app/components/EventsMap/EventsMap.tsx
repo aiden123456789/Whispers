@@ -53,16 +53,14 @@ export default function EventsMap() {
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
       .then(r => r.json())
       .then((data: Whisper[]) => {
-        setMessages([
-          ...data,
-          {
-            id: 9999,
-            text: "Far away test message",
-            lat: lat + 0.01, // ~1km away
-            lng: lng + 0.01,
-            created_at: new Date().toISOString(),
-          }
-        ]);
+        const fakeMessage: Whisper = {
+          id: 9999,
+          text: "Far away test message",
+          lat: lat + 0.01,
+          lng: lng + 0.01,
+          created_at: new Date().toISOString(),
+        };
+        setMessages([...data, fakeMessage]);
       })
       .catch(console.error);
   }, [center]);
@@ -124,10 +122,6 @@ export default function EventsMap() {
   const clusterLng = groupMessages.length > 0
     ? groupMessages.reduce((sum, m) => sum + m.lng, 0) / groupMessages.length
     : 0;
-
-  console.log('center:', center);
-  console.log('groupMessages:', groupMessages);
-  console.log('farMessages:', farMessages);
 
   if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
