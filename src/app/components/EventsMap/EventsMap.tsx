@@ -58,7 +58,7 @@ export default function EventsMap() {
           text: "Far away test message",
           lat: lat + 0.01,
           lng: lng + 0.01,
-          createdAt: new Date().toISOString(), // ✅ Corrected to camelCase
+          createdAt: Date.now(), // ✅ FIXED: Use number timestamp
         };
         setMessages([...data, fakeMessage]);
       })
