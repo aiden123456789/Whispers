@@ -3,7 +3,6 @@
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -25,7 +24,7 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
   return (
     <div className="space-y-2 max-h-48 overflow-y-auto">
       {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
+        .sort((a, b) => b.createdAt - a.createdAt)
         .map(msg => (
           <div key={msg.id} className="text-sm p-1 border-b">
             <span className="block text-gray-600 text-xs">
@@ -52,12 +51,28 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 }
 
-export default function EventsMap() {
+// Main map component (client-only)
+function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
+  const [speechBubbleIcon, setSpeechBubbleIcon] = useState<any>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
+  // Create speech bubble icon after leaflet loads (client-side)
+  useEffect(() => {
+    import('leaflet').then(L => {
+      const icon = L.divIcon({
+        html: '💬',
+        className: 'custom-speech-bubble',
+        iconSize: [24, 24],
+        iconAnchor: [12, 24],
+      });
+      setSpeechBubbleIcon(icon);
+    });
+  }, []);
+
+  // Get geolocation
   useEffect(() => {
     if (!('geolocation' in navigator)) {
       setGeoError('Geolocation not supported');
@@ -81,13 +96,15 @@ export default function EventsMap() {
     return () => navigator.geolocation.clearWatch(id);
   }, []);
 
-  // Fetch all messages (no location filter)
+  // Fetch messages whenever center updates
   useEffect(() => {
+    if (!center) return;
+    const [lat, lng] = center;
     fetch('/api/messages')
       .then(r => r.json())
       .then((data: Whisper[]) => setMessages(data))
       .catch(console.error);
-  }, []);
+  }, [center]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -107,7 +124,7 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group messages by proximity
+  // Group messages by location proximity
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
 
   for (const msg of messages) {
@@ -126,7 +143,7 @@ export default function EventsMap() {
     }
   }
 
-  if (!center) return <p>Loading map…</p>;
+  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -148,18 +165,12 @@ export default function EventsMap() {
         />
 
         {groupedMessages.map((group, i) => {
-          const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
-
-          // Create a unique DivIcon per marker
-          const icon = L.divIcon({
-            html: '💬',
-            className: 'custom-speech-bubble',
-            iconSize: [24, 24],
-            iconAnchor: [12, 24],
-          });
+          const distance = center
+            ? haversineDistance(center[0], center[1], group.lat, group.lng)
+            : Infinity;
 
           return (
-            <Marker key={i} position={[group.lat, group.lng]} icon={icon}>
+            <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
               <Popup>
                 {distance <= GROUP_RADIUS_METERS ? (
                   <MessageList messages={group.messages} />
@@ -194,4 +205,19 @@ export default function EventsMap() {
       `}</style>
     </>
   );
+}
+
+// Wrapper component to render map only on client to avoid SSR issues
+export default function EventsMapWrapper() {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return <p>Loading map…</p>;
+  }
+
+  return <EventsMap />;
 }
