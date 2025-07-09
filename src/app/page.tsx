@@ -1,4 +1,4 @@
-import EventsMap from './components/EventsMap';
+import EventsMap from './components/EventsMap/EventsMap';
 
 export default function HomePage() {
   return (
