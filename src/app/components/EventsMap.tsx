@@ -134,7 +134,7 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group messages that are within GROUP_RADIUS_METERS of each other
+  // Group messages within GROUP_RADIUS_METERS of each other
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
   const ungroupedMessages: Whisper[] = [];
   const assignedIds = new Set<number>();
@@ -142,6 +142,7 @@ export default function EventsMap() {
   for (const msg of messages) {
     if (assignedIds.has(msg.id)) continue;
 
+    // Find all messages close enough to form a group (including the current message)
     const nearbyGroup = messages.filter(
       m =>
         !assignedIds.has(m.id) &&
@@ -151,7 +152,7 @@ export default function EventsMap() {
     nearbyGroup.forEach(m => assignedIds.add(m.id));
 
     if (nearbyGroup.length > 1) {
-      // Compute average location for the group marker
+      // Compute average lat/lng for group's marker position
       const avgLat = nearbyGroup.reduce((sum, m) => sum + m.lat, 0) / nearbyGroup.length;
       const avgLng = nearbyGroup.reduce((sum, m) => sum + m.lng, 0) / nearbyGroup.length;
       groupedMessages.push({ lat: avgLat, lng: avgLng, messages: nearbyGroup });
@@ -170,7 +171,12 @@ export default function EventsMap() {
         </div>
       )}
 
-      <MapContainer center={center} zoom={16} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
+      <MapContainer
+        center={center}
+        zoom={16}
+        scrollWheelZoom
+        style={{ height: '80vh', width: '100%' }}
+      >
         <TileLayer
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -185,7 +191,7 @@ export default function EventsMap() {
           </Marker>
         ))}
 
-        {/* Single ungrouped messages as green dots */}
+        {/* Ungrouped single messages as green dots */}
         {ungroupedMessages.map((msg, i) => (
           <Marker key={`solo-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon}>
             <Popup>
