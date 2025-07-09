@@ -10,8 +10,8 @@ const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), 
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
-const GROUP_RADIUS_METERS = 30.48; // 100 feet
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
+const GROUP_RADIUS_METERS = 30.48;
 
 interface Whisper {
   id: number;
@@ -21,20 +21,23 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = ({ messages }: { messages: Whisper[] }) => (
-  <div className="space-y-2 max-h-48 overflow-y-auto">
-    {[...messages]
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .map(msg => (
-        <div key={msg.id} className="text-sm p-1 border-b">
-          <span className="block text-gray-600 text-xs">
-            {new Date(msg.createdAt).toLocaleTimeString()}
-          </span>
-          <span>{msg.text}</span>
-        </div>
-      ))}
-  </div>
-);
+const MessageList = ({ messages }: { messages: Whisper[] }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={containerRef} className="space-y-2 max-h-48 overflow-y-auto">
+      {[...messages]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(msg => (
+          <div key={msg.id} className="text-sm p-1 border-b">
+            <span className="block text-gray-600 text-xs">
+              {new Date(msg.createdAt).toLocaleTimeString()}
+            </span>
+            <span>{msg.text}</span>
+          </div>
+        ))}
+    </div>
+  );
+};
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371e3;
@@ -66,9 +69,10 @@ export default function EventsMap() {
           iconAnchor: [12, 24],
         })
       );
+
       setGreenDotIcon(
         L.divIcon({
-          html: '💚',
+          html: '🟢',
           className: 'custom-green-dot',
           iconSize: [24, 24],
           iconAnchor: [12, 24],
@@ -152,27 +156,18 @@ export default function EventsMap() {
         </div>
       )}
 
-      <MapContainer
-        center={center}
-        zoom={16}
-        scrollWheelZoom
-        style={{ height: '80vh', width: '100%' }}
-      >
+      <MapContainer center={center} zoom={16} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
         <TileLayer
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
         {groupedMessages.map((group, i) => {
-          const isNearby =
-            haversineDistance(center[0], center[1], group.lat, group.lng) <= GROUP_RADIUS_METERS;
+          const isNearby = haversineDistance(center[0], center[1], group.lat, group.lng) <= GROUP_RADIUS_METERS;
+          const icon = isNearby ? speechBubbleIcon : greenDotIcon;
 
           return (
-            <Marker
-              key={i}
-              position={[group.lat, group.lng]}
-              icon={isNearby ? speechBubbleIcon : greenDotIcon}
-            >
+            <Marker key={i} position={[group.lat, group.lng]} icon={icon}>
               {isNearby && (
                 <Popup>
                   <MessageList messages={group.messages} />
@@ -193,16 +188,7 @@ export default function EventsMap() {
       </form>
 
       <style>{`
-        .custom-speech-bubble {
-          font-size: 20px;
-          text-align: center;
-          line-height: 1;
-          user-select: none;
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        .custom-green-dot {
+        .custom-speech-bubble, .custom-green-dot {
           font-size: 20px;
           text-align: center;
           line-height: 1;
