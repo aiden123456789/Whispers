@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.custom-green-dot {
+  font-size: 18px;
+  text-align: center;
+  line-height: 1;
+  user-select: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
