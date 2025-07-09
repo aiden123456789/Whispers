@@ -62,17 +62,27 @@ export default function EventsMap() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
+  const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     import('leaflet').then(L => {
-      const icon = L.divIcon({
+      const speechIcon = L.divIcon({
         html: '💬',
         className: 'custom-speech-bubble',
         iconSize: [24, 24],
         iconAnchor: [12, 24],
       });
-      setSpeechBubbleIcon(icon);
+
+      const dotIcon = L.divIcon({
+        html: '<div style="width:14px; height:14px; background-color:green; border-radius:50%; border: 2px solid white;"></div>',
+        className: 'custom-green-dot',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+
+      setSpeechBubbleIcon(speechIcon);
+      setGreenDotIcon(dotIcon);
     });
   }, []);
 
@@ -144,7 +154,7 @@ export default function EventsMap() {
     }
   }
 
-  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
+  if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -166,27 +176,21 @@ export default function EventsMap() {
         />
 
         {groupedMessages.map((group, i) => {
-          const distance = center
-            ? haversineDistance(center[0], center[1], group.lat, group.lng)
-            : Infinity;
+          const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
+          const isNearby = distance <= GROUP_RADIUS_METERS;
 
           return (
-            <Marker key={i} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
+            <Marker
+              key={i}
+              position={[group.lat, group.lng]}
+              icon={isNearby ? speechBubbleIcon : greenDotIcon}
+            >
               <Popup>
-                {distance <= GROUP_RADIUS_METERS ? (
+                {isNearby ? (
                   <MessageList messages={group.messages} />
                 ) : (
-                  <div className="flex justify-center items-center p-2">
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        width: 16,
-                        height: 16,
-                        borderRadius: '50%',
-                        backgroundColor: 'green',
-                      }}
-                      title="Whisper location"
-                    />
+                  <div className="text-center text-sm text-gray-600 p-2">
+                    Move closer to read these whispers.
                   </div>
                 )}
               </Popup>
@@ -213,6 +217,9 @@ export default function EventsMap() {
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
+        }
+        .custom-green-dot {
+          /* no extra styling needed */
         }
       `}</style>
     </>
