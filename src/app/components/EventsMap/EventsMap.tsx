@@ -23,7 +23,7 @@ export default function EventsMap() {
   const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
-  // Set up custom icons
+  // Setup Leaflet icons
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
@@ -34,7 +34,6 @@ export default function EventsMap() {
           iconAnchor: [12, 24],
         })
       );
-
       setGreenDotIcon(
         L.divIcon({
           html: '🟢',
@@ -46,17 +45,18 @@ export default function EventsMap() {
     });
   }, []);
 
-  // Load nearby messages
+  // Fetch nearby messages
   useEffect(() => {
     if (!center) return;
+
     const [lat, lng] = center;
     fetch(`/api/messages?lat=${lat}&lng=${lng}`)
-      .then(r => r.json())
+      .then(res => res.json())
       .then((data: Whisper[]) => setMessages(data))
       .catch(console.error);
   }, [center]);
 
-  // Handle message submission
+  // Submit new whisper
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!center) return;
@@ -75,7 +75,7 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group and ungroup messages
+  // Grouping logic
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
   const ungroupedMessages: Whisper[] = [];
   const assignedIds = new Set<number>();
@@ -116,7 +116,7 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Grouped 💬 messages */}
+        {/* 💬 Grouped messages */}
         {groupedMessages.map((group, i) => (
           <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
             <Popup>
@@ -125,7 +125,7 @@ export default function EventsMap() {
           </Marker>
         ))}
 
-        {/* Ungrouped 🟢 messages */}
+        {/* 🟢 Ungrouped messages */}
         {ungroupedMessages.map((msg, i) => (
           <Marker key={`solo-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon}>
             <Popup>
