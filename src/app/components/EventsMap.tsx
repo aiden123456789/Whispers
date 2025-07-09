@@ -21,42 +21,6 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = ({ messages }: { messages: Whisper[] }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <div
-      ref={containerRef}
-      className="space-y-2 max-h-48 overflow-y-auto"
-    >
-      {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .map(msg => (
-          <div key={msg.id} className="text-sm p-1 border-b">
-            <span className="block text-gray-600 text-xs">
-              {new Date(msg.createdAt).toLocaleTimeString()}
-            </span>
-            <span>{msg.text}</span>
-          </div>
-        ))}
-    </div>
-  );
-};
-
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371e3;
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 export default function EventsMap() {
   const [center, setCenter] = useState<[number, number] | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -74,22 +38,25 @@ export default function EventsMap() {
         iconAnchor: [12, 24],
       });
 
+      // VERY SIMPLE green dot div with inline styles
       const dotIcon = L.divIcon({
         html: `<div style="
           width: 16px; 
           height: 16px; 
           background-color: #28a745; 
-          border: 3px solid white; 
+          border: 2px solid white; 
           border-radius: 50%; 
-          box-shadow: 0 0 6px #28a745;
+          box-shadow: 0 0 8px 2px #28a745;
+          display: block;
         "></div>`,
-        className: '', // no default styles to override
-        iconSize: [22, 22],
-        iconAnchor: [11, 11], // center the dot exactly on location
+        className: '', // no default styles overriding
+        iconSize: [20, 20],
+        iconAnchor: [10, 10], // center exactly
       });
 
       setSpeechBubbleIcon(speechIcon);
       setGreenDotIcon(dotIcon);
+      console.log('Icons set:', { speechIcon, dotIcon });
     });
   }, []);
 
@@ -163,6 +130,9 @@ export default function EventsMap() {
 
   if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
+  // Debug log
+  console.log('Rendering markers, groupedMessages:', groupedMessages);
+
   return (
     <>
       {geoError && (
@@ -185,6 +155,9 @@ export default function EventsMap() {
         {groupedMessages.map((group, i) => {
           const distance = haversineDistance(center[0], center[1], group.lat, group.lng);
           const isNearby = distance <= GROUP_RADIUS_METERS;
+
+          // Debug to confirm which icon is used
+          console.log(`Marker ${i}: isNearby=${isNearby} distance=${distance.toFixed(1)}m`);
 
           return (
             <Marker
@@ -228,4 +201,18 @@ export default function EventsMap() {
       `}</style>
     </>
   );
+}
+
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
