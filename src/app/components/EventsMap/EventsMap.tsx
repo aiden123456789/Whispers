@@ -74,30 +74,30 @@ export default function EventsMap() {
     if (whisperInput.current) whisperInput.current.value = '';
   }
 
-  // Group messages and find ungrouped ones
+  // Group messages (only clusters of 2+) and identify ungrouped
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
-  const ungroupedMessages: Whisper[] = [];
-  const assignedIds = new Set<number>();
+  const groupedIds = new Set<number>();
 
   for (const msg of messages) {
-    if (assignedIds.has(msg.id)) continue;
+    if (groupedIds.has(msg.id)) continue;
 
-    const nearby = messages.filter(
-      m =>
-        !assignedIds.has(m.id) &&
-        haversineDistance(msg.lat, msg.lng, m.lat, m.lng) <= GROUP_RADIUS_METERS
+    const group = messages.filter(
+      other =>
+        !groupedIds.has(other.id) &&
+        haversineDistance(msg.lat, msg.lng, other.lat, other.lng) <= GROUP_RADIUS_METERS
     );
 
-    nearby.forEach(m => assignedIds.add(m.id));
+    if (group.length > 1) {
+      group.forEach(m => groupedIds.add(m.id));
 
-    if (nearby.length > 1) {
-      const avgLat = nearby.reduce((sum, m) => sum + m.lat, 0) / nearby.length;
-      const avgLng = nearby.reduce((sum, m) => sum + m.lng, 0) / nearby.length;
-      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: nearby });
-    } else {
-      ungroupedMessages.push(nearby[0]);
+      const avgLat = group.reduce((sum, m) => sum + m.lat, 0) / group.length;
+      const avgLng = group.reduce((sum, m) => sum + m.lng, 0) / group.length;
+
+      groupedMessages.push({ lat: avgLat, lng: avgLng, messages: group });
     }
   }
+
+  const ungroupedMessages = messages.filter(msg => !groupedIds.has(msg.id));
 
   if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
