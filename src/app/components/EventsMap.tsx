@@ -10,7 +10,7 @@ const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), 
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
-const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
+const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 30.48; // 100 feet
 
 interface Whisper {
@@ -30,7 +30,7 @@ const MessageList = ({ messages }: { messages: Whisper[] }) => {
       className="space-y-2 max-h-48 overflow-y-auto"
     >
       {[...messages]
-        .sort((a, b) => b.createdAt - a.createdAt) // Newest on top
+        .sort((a, b) => b.createdAt - a.createdAt)
         .map(msg => (
           <div key={msg.id} className="text-sm p-1 border-b">
             <span className="block text-gray-600 text-xs">
@@ -75,10 +75,17 @@ export default function EventsMap() {
       });
 
       const dotIcon = L.divIcon({
-        html: '<div style="width:14px; height:14px; background-color:green; border-radius:50%; border: 2px solid white;"></div>',
-        className: 'custom-green-dot',
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
+        html: `<div style="
+          width: 16px; 
+          height: 16px; 
+          background-color: #28a745; 
+          border: 3px solid white; 
+          border-radius: 50%; 
+          box-shadow: 0 0 6px #28a745;
+        "></div>`,
+        className: '', // no default styles to override
+        iconSize: [22, 22],
+        iconAnchor: [11, 11], // center the dot exactly on location
       });
 
       setSpeechBubbleIcon(speechIcon);
@@ -217,9 +224,6 @@ export default function EventsMap() {
           background: transparent !important;
           border: none !important;
           box-shadow: none !important;
-        }
-        .custom-green-dot {
-          /* no extra styling needed */
         }
       `}</style>
     </>
