@@ -47,42 +47,12 @@ export default function EventsMap() {
 
   useEffect(() => {
     if (!center) return;
-    const [lat, lng] = center;
 
-    fetch(`/api/messages?lat=${lat}&lng=${lng}`)
+    fetch('/api/messages')
       .then(res => res.json())
       .then((data: Whisper[]) => {
-        console.log('[DEBUG] API messages:', data);
-
-        const fakeMessages: Whisper[] = [
-          {
-            id: 9999,
-            text: "Far away test message 1",
-            lat: lat + 0.01,
-            lng: lng + 0.01,
-            createdAt: Date.now(),
-          },
-          {
-            id: 10000,
-            text: "Far away test message 2",
-            lat: lat + 0.015,
-            lng: lng - 0.02,
-            createdAt: Date.now(),
-          },
-          {
-            id: 10001,
-            text: "Far away test message 3",
-            lat: lat - 0.02,
-            lng: lng + 0.018,
-            createdAt: Date.now(),
-          },
-        ];
-
-        // Uncomment if you want to test fake far messages:
-        setMessages([...data, ...fakeMessages]);
-
-        // Use this if you're done testing:
-        // setMessages(data);
+        console.log('[DEBUG] Loaded messages:', data);
+        setMessages(data);
       })
       .catch(console.error);
   }, [center]);
@@ -124,8 +94,6 @@ export default function EventsMap() {
       if (isNear) nearMessages.push(msg);
       else if (!isMine) farMessages.push(msg);
     }
-
-    console.log('[DEBUG] near:', nearMessages.length, 'far:', farMessages.length);
   }
 
   const groupMessages = [...nearMessages];

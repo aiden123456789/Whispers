@@ -1,4 +1,3 @@
-// src/lib/db.ts
 import { createClient, Row } from "@libsql/client";
 
 if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
@@ -21,39 +20,6 @@ await turso.execute(`
   );
 `);
 
-export async function getNearbyMessages(
-  lat: number,
-  lng: number,
-  radiusMeters = 50,
-) {
-  const cutoff        = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
-  const degreeRadius  = radiusMeters / 111_111;
-
-  const { rows } = await turso.execute(
-    `
-      SELECT * FROM whispers
-      WHERE createdAt > ?
-        AND lat BETWEEN ? AND ?
-        AND lng BETWEEN ? AND ?
-    `,
-    [
-      cutoff,
-      lat - degreeRadius,
-      lat + degreeRadius,
-      lng - degreeRadius,
-      lng + degreeRadius,
-    ],
-  );
-
-  return (rows as Row[]).map((r) => ({
-    id:         r.id,
-    text:       r.text,
-    lat:        r.lat,
-    lng:        r.lng,
-    createdAt:  r.createdAt,
-  }));
-}
-
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
@@ -63,7 +29,7 @@ export async function saveMessage(text: string, lat: number, lng: number) {
       INSERT INTO whispers (text, lat, lng, createdAt)
       VALUES (?, ?, ?, ?);
     `,
-    [text, lat, lng, now],
+    [text, lat, lng, now]
   );
 
   // Retrieve the auto-incremented ID
@@ -71,4 +37,27 @@ export async function saveMessage(text: string, lat: number, lng: number) {
   const id = (rows[0] as Row).id as number;
 
   return { id, text, lat, lng, createdAt: now };
+}
+
+// 🆕 Get all recent messages (up to 90 days old), sorted by newest first
+export async function getAllRecentMessages(limit = 100) {
+  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
+
+  const { rows } = await turso.execute(
+    `
+      SELECT * FROM whispers
+      WHERE createdAt > ?
+      ORDER BY createdAt DESC
+      LIMIT ?
+    `,
+    [cutoff, limit]
+  );
+
+  return (rows as Row[]).map((r) => ({
+    id: r.id,
+    text: r.text,
+    lat: r.lat,
+    lng: r.lng,
+    createdAt: r.createdAt,
+  }));
 }

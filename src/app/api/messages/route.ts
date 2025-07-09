@@ -1,18 +1,10 @@
 // src/app/api/messages/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getNearbyMessages, saveMessage } from "../../lib/db";
+import { getAllRecentMessages, saveMessage } from "../../lib/db";
 
 export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const lat = Number(url.searchParams.get("lat"));
-  const lng = Number(url.searchParams.get("lng"));
-
-  if (Number.isNaN(lat) || Number.isNaN(lng)) {
-    return NextResponse.json({ error: "Missing lat/lng" }, { status: 400 });
-  }
-
   try {
-    const msgs = await getNearbyMessages(lat, lng);
+    const msgs = await getAllRecentMessages(); // fetch all or many messages
     return NextResponse.json(msgs);
   } catch (err) {
     console.error("GET /api/messages error:", err);
