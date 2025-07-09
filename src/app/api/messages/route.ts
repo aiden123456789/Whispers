@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllRecentMessages, saveMessage } from "../../lib/db";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const msgs = await getAllRecentMessages(); // fetch all or many messages
     return NextResponse.json(msgs);
