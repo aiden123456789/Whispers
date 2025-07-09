@@ -161,10 +161,9 @@ export default function EventsMap() {
           text-align: center;
           line-height: 1;
           user-select: none;
-          background: white !important;
-          border: 2px solid green !important;
-          border-radius: 50% !important;
-          box-shadow: 0 0 6px rgba(0, 255, 0, 0.9) !important;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
         }
       `}</style>
     </>
