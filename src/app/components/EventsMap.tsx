@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
+import 'leaflet/dist/leaflet.css';
 import { DivIcon } from 'leaflet';
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
@@ -10,7 +11,7 @@ const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr:
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576]; // Athens, GA
-const GROUP_RADIUS_METERS = 30.48;
+const GROUP_RADIUS_METERS = 30.48; // 100 feet
 
 interface Whisper {
   id: number;
@@ -20,31 +21,33 @@ interface Whisper {
   createdAt: number;
 }
 
-const MessageList = ({ messages }: { messages: Whisper[] }) => (
-  <div className="space-y-2 max-h-48 overflow-y-auto">
-    {[...messages]
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .map(msg => (
-        <div key={msg.id} className="text-sm p-1 border-b">
-          <span className="block text-gray-600 text-xs">
-            {new Date(msg.createdAt).toLocaleTimeString()}
-          </span>
-          <span>{msg.text}</span>
-        </div>
-      ))}
-  </div>
-);
+const MessageList = ({ messages }: { messages: Whisper[] }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div ref={containerRef} className="space-y-2 max-h-48 overflow-y-auto">
+      {[...messages]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(msg => (
+          <div key={msg.id} className="text-sm p-1 border-b">
+            <span className="block text-gray-600 text-xs">
+              {new Date(msg.createdAt).toLocaleTimeString()}
+            </span>
+            <span>{msg.text}</span>
+          </div>
+        ))}
+    </div>
+  );
+};
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371e3;
   const toRad = (x: number) => (x * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -54,16 +57,26 @@ export default function EventsMap() {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
+  const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     import('leaflet').then(L => {
-      setSpeechBubbleIcon(L.divIcon({
+      const speechIcon = L.divIcon({
         html: '💬',
         className: 'custom-speech-bubble',
         iconSize: [24, 24],
         iconAnchor: [12, 24],
-      }));
+      });
+      setSpeechBubbleIcon(speechIcon);
+
+      const greenIcon = L.divIcon({
+        html: '🟢',
+        className: 'custom-green-dot',
+        iconSize: [20, 20],
+        iconAnchor: [10, 20],
+      });
+      setGreenDotIcon(greenIcon);
     });
   }, []);
 
@@ -118,23 +131,27 @@ export default function EventsMap() {
   }
 
   const groupedMessages: Array<{ lat: number; lng: number; messages: Whisper[] }> = [];
-  const distantMessages: Whisper[] = [];
+  const ungroupedMessages: Whisper[] = [];
 
   for (const msg of messages) {
     const foundGroup = groupedMessages.find(group =>
       haversineDistance(group.lat, group.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
     );
-
     if (foundGroup) {
       foundGroup.messages.push(msg);
-    } else if (center && haversineDistance(center[0], center[1], msg.lat, msg.lng) <= GROUP_RADIUS_METERS) {
-      groupedMessages.push({ lat: msg.lat, lng: msg.lng, messages: [msg] });
     } else {
-      distantMessages.push(msg);
+      const nearAny = messages.some(
+        m => m.id !== msg.id && haversineDistance(m.lat, m.lng, msg.lat, msg.lng) <= GROUP_RADIUS_METERS
+      );
+      if (nearAny) {
+        groupedMessages.push({ lat: msg.lat, lng: msg.lng, messages: [msg] });
+      } else {
+        ungroupedMessages.push(msg);
+      }
     }
   }
 
-  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
+  if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -155,6 +172,7 @@ export default function EventsMap() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        {/* 💬 Grouped messages */}
         {groupedMessages.map((group, i) => (
           <Marker key={`group-${i}`} position={[group.lat, group.lng]} icon={speechBubbleIcon}>
             <Popup>
@@ -163,17 +181,13 @@ export default function EventsMap() {
           </Marker>
         ))}
 
-        {distantMessages.map((msg, i) => (
-          <Marker
-            key={`distant-${i}`}
-            position={[msg.lat, msg.lng]}
-            icon={new DivIcon({
-              html: `<div style="width: 14px; height: 14px; background: green; border-radius: 50%; box-shadow: 0 0 4px green;"></div>`,
-              className: '',
-              iconSize: [14, 14],
-              iconAnchor: [7, 7],
-            })}
-          />
+        {/* 🟢 Ungrouped single-message dots */}
+        {ungroupedMessages.map((msg, i) => (
+          <Marker key={`solo-${i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon}>
+            <Popup>
+              <MessageList messages={[msg]} />
+            </Popup>
+          </Marker>
         ))}
       </MapContainer>
 
@@ -189,6 +203,15 @@ export default function EventsMap() {
       <style>{`
         .custom-speech-bubble {
           font-size: 20px;
+          text-align: center;
+          line-height: 1;
+          user-select: none;
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .custom-green-dot {
+          font-size: 18px;
           text-align: center;
           line-height: 1;
           user-select: none;
