@@ -15,9 +15,18 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const { text, lat, lng } = await req.json();
+
     if (!text || lat == null || lng == null) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
+
+    if (text.length > 50) {
+      return NextResponse.json(
+        { error: "Message is too long (max 50 characters)" },
+        { status: 400 }
+      );
+    }
+
     const saved = await saveMessage(text, lat, lng);
     return NextResponse.json(saved, { status: 201 });
   } catch (err) {
