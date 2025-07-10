@@ -2,19 +2,31 @@
 
 import { useMap } from 'react-leaflet';
 import { useEffect } from 'react';
-// @ts-expect-error leaflet.heat has no types
-import 'leaflet.heat';
 import L from 'leaflet';
+import 'leaflet.heat';
 
 interface HeatmapLayerProps {
-  points: [number, number, number?][]; // [lat, lng, intensity]
+  points: [number, number, number?][];
 }
 
 export function HeatmapLayer({ points }: HeatmapLayerProps) {
   const map = useMap();
 
   useEffect(() => {
-    const heatLayer = (L as any).heatLayer(points, {
+    // Extend the leaflet module to include heatLayer
+    const leafletWithHeat = L as typeof L & {
+      heatLayer: (
+        latlngs: [number, number, number?][],
+        options?: {
+          radius?: number;
+          blur?: number;
+          maxZoom?: number;
+          gradient?: { [key: number]: string };
+        }
+      ) => L.Layer;
+    };
+
+    const heat = leafletWithHeat.heatLayer(points, {
       radius: 25,
       blur: 15,
       maxZoom: 17,
@@ -22,14 +34,13 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
         0.0: 'blue',
         0.4: 'lime',
         0.7: 'yellow',
-        1.0: 'red'
-      }
+        1.0: 'red',
+      },
     });
 
-    heatLayer.addTo(map);
-
+    heat.addTo(map);
     return () => {
-      map.removeLayer(heatLayer);
+      map.removeLayer(heat);
     };
   }, [map, points]);
 
