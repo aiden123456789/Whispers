@@ -27,11 +27,11 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
     };
 
     const heat = leafletWithHeat.heatLayer(points, {
-      radius: 100,
+      radius: 130,
       blur: 25,
       maxZoom: 200,
       gradient: {
-        0.9: 'blue',
+        0.99: 'blue',
         
       },
     });
