@@ -17,6 +17,7 @@ const HeatmapLayer = dynamic(() => import('./HeatmapLayer').then(m => m.HeatmapL
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 304;
 const MAX_CHARACTERS = 50;
+const RATE_LIMIT_SECONDS = 60;
 
 export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
@@ -24,6 +25,8 @@ export default function EventsMap() {
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
   const [myMessageId, setMyMessageId] = useState<number | null>(null);
   const [whisperText, setWhisperText] = useState('');
+  const [lastMessageTime, setLastMessageTime] = useState<number | null>(null);
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     import('leaflet').then(L => {
@@ -50,9 +53,26 @@ export default function EventsMap() {
       .catch(console.error);
   }, [center]);
 
+  useEffect(() => {
+    if (!lastMessageTime) return;
+
+    const interval = setInterval(() => {
+      const secondsPassed = Math.floor((Date.now() - lastMessageTime) / 1000);
+      const remaining = RATE_LIMIT_SECONDS - secondsPassed;
+      setCooldown(remaining > 0 ? remaining : 0);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastMessageTime]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!center) return;
+
+    if (cooldown > 0) {
+      alert(`Please wait ${cooldown}s before sending another whisper.`);
+      return;
+    }
 
     const text = whisperText.trim();
     if (!text || text.length > MAX_CHARACTERS) return;
@@ -63,10 +83,18 @@ export default function EventsMap() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, lat, lng }),
     });
+
+    if (!res.ok) {
+      const { error } = await res.json();
+      alert(error || 'Failed to send message');
+      return;
+    }
+
     const newWhisper: Whisper = await res.json();
     setMessages(prev => [...prev, newWhisper]);
     setMyMessageId(newWhisper.id);
     setWhisperText('');
+    setLastMessageTime(Date.now());
   }
 
   const nearMessages: Whisper[] = [];
@@ -102,7 +130,6 @@ export default function EventsMap() {
     : 0;
 
   const heatPoints = messages.map(m => [m.lat, m.lng, 0.6] as [number, number, number]);
-  console.log('[DEBUG] Heatmap points:', heatPoints);
 
   if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
@@ -140,10 +167,13 @@ export default function EventsMap() {
             placeholder="Leave a whisper…"
             className="flex-grow p-2 border rounded"
           />
-          <button className="px-4 py-2 border rounded">Send</button>
+          <button className="px-4 py-2 border rounded" disabled={cooldown > 0}>
+            Send
+          </button>
         </div>
         <div className="text-sm text-gray-500 text-right">
           {MAX_CHARACTERS - whisperText.length} characters left
+          {cooldown > 0 && ` • Wait ${cooldown}s`}
         </div>
       </form>
 
