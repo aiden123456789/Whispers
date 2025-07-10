@@ -30,16 +30,12 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
       radius: 100,
       blur: 15,
       gradient: {
-        0.2: 'black',
-        0.4: 'darkred',
-        0.6: 'red',
-        0.8: 'orangered',
-        1.0: 'yellow',
+        0.9: 'blue',
       },
     });
 
     heatRef.current = heatLayer;
-    if (map.getZoom() < 17) {
+    if (map.getZoom() < 40) {
       heatLayer.addTo(map);
     }
 
