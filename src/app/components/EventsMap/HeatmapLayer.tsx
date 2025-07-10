@@ -1,7 +1,7 @@
 'use client';
 
 import { useMap } from 'react-leaflet';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet.heat';
 
@@ -11,9 +11,9 @@ interface HeatmapLayerProps {
 
 export function HeatmapLayer({ points }: HeatmapLayerProps) {
   const map = useMap();
+  const heatRef = useRef<L.Layer | null>(null);
 
   useEffect(() => {
-    // Extend the leaflet module to include heatLayer
     const leafletWithHeat = L as typeof L & {
       heatLayer: (
         latlngs: [number, number, number?][],
@@ -26,19 +26,39 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
       ) => L.Layer;
     };
 
-    const heat = leafletWithHeat.heatLayer(points, {
+    const heatLayer = leafletWithHeat.heatLayer(points, {
       radius: 100,
       blur: 15,
-      maxZoom: 250,
       gradient: {
-        0.9: 'blue',
-        
+        0.2: 'black',
+        0.4: 'darkred',
+        0.6: 'red',
+        0.8: 'orangered',
+        1.0: 'yellow',
       },
     });
 
-    heat.addTo(map);
+    heatRef.current = heatLayer;
+    if (map.getZoom() < 17) {
+      heatLayer.addTo(map);
+    }
+
+    const handleZoom = () => {
+      const zoom = map.getZoom();
+      if (zoom >= 17) {
+        map.removeLayer(heatLayer);
+      } else {
+        if (!map.hasLayer(heatLayer)) {
+          heatLayer.addTo(map);
+        }
+      }
+    };
+
+    map.on('zoomend', handleZoom);
+
     return () => {
-      map.removeLayer(heat);
+      map.off('zoomend', handleZoom);
+      map.removeLayer(heatLayer);
     };
   }, [map, points]);
 
