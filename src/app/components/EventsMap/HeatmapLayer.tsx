@@ -34,7 +34,6 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
         0.4: 'blue',
         0.5: 'lime',
         0.6: 'yellow',
-        0.7: 'red',
       },
     });
 
