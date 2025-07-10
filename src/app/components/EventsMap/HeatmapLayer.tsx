@@ -27,7 +27,7 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
     };
 
     const heat = leafletWithHeat.heatLayer(points, {
-      radius: 500,
+      radius: 250,
       blur: 25,
       maxZoom: 17,
       gradient: {
