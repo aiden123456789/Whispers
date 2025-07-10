@@ -18,8 +18,8 @@ export default function AgeGate({ children }: { children: React.ReactNode }) {
   if (!ageConfirmed) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-6 text-center">
-        <h1 className="text-2xl font-bold mb-4">Are you 13 years or older?</h1>
-        <p className="mb-4 text-black-700">You must be at least 13 to use this app.</p>
+        <h1 className="text-2xl text-gray-700 font-bold mb-4">Are you 13 years or older?</h1>
+        <p className="mb-4 text-gray-700">You must be at least 13 to use this app.</p>
         <button
           onClick={handleConfirm}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
