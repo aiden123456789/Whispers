@@ -27,14 +27,14 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
     };
 
     const heat = leafletWithHeat.heatLayer(points, {
-      radius: 25,
-      blur: 15,
+      radius: 30,
+      blur: 25,
       maxZoom: 17,
       gradient: {
-        0.0: 'blue',
-        0.4: 'lime',
-        0.7: 'yellow',
-        1.0: 'red',
+        0.0: '#330000',   // very dark red
+        0.4: '#660000',   // dark red
+        0.7: '#cc0000',   // bright red
+        1.0: '#ff0000',   // pure red
       },
     });
 
