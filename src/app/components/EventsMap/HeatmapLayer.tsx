@@ -35,13 +35,13 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
     });
 
     heatRef.current = heatLayer;
-    if (map.getZoom() < 100) {
+    if (map.getZoom() < 10) {
       heatLayer.addTo(map);
     }
 
     const handleZoom = () => {
       const zoom = map.getZoom();
-      if (zoom >= 100) {
+      if (zoom >= 10) {
         map.removeLayer(heatLayer);
       } else {
         if (!map.hasLayer(heatLayer)) {
