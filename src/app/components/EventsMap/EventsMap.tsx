@@ -12,6 +12,7 @@ const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContai
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
+const HeatmapLayer = dynamic(() => import('./HeatmapLayer').then(m => m.HeatmapLayer), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 200;
@@ -132,9 +133,8 @@ export default function EventsMap() {
           </Marker>
         )}
 
-        {farMessages.map((msg, i) => (
-          <Marker key={`green-${msg.id ?? i}`} position={[msg.lat, msg.lng]} icon={greenDotIcon} />
-        ))}
+        <HeatmapLayer points={farMessages.map(msg => [msg.lat, msg.lng, 0.5])} />
+
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
