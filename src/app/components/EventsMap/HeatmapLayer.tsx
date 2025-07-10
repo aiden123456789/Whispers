@@ -32,8 +32,7 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
       maxZoom: 17,
       gradient: {
         0.3: 'blue',
-        0.4: 'lime',
-        0.5: 'yellow',
+        
       },
     });
 
