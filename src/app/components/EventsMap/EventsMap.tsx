@@ -21,7 +21,6 @@ export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
-  const [greenDotIcon, setGreenDotIcon] = useState<DivIcon | null>(null);
   const whisperInput = useRef<HTMLInputElement>(null);
   const [myMessageId, setMyMessageId] = useState<number | null>(null);
 
@@ -33,14 +32,6 @@ export default function EventsMap() {
           className: 'custom-speech-bubble',
           iconSize: [24, 24],
           iconAnchor: [12, 24],
-        })
-      );
-      setGreenDotIcon(
-        L.divIcon({
-          html: '🟢',
-          className: 'custom-green-dot',
-          iconSize: [20, 20],
-          iconAnchor: [10, 20],
         })
       );
     });
@@ -109,7 +100,10 @@ export default function EventsMap() {
     ? groupMessages.reduce((sum, m) => sum + m.lng, 0) / groupMessages.length
     : 0;
 
-  if (!center || !speechBubbleIcon || !greenDotIcon) return <p>Loading map…</p>;
+  const heatPoints = messages.map(m => [m.lat, m.lng, 0.6] as [number, number, number]);
+  console.log('[DEBUG] Heatmap points:', heatPoints);
+
+  if (!center || !speechBubbleIcon) return <p>Loading map…</p>;
 
   return (
     <>
@@ -133,8 +127,8 @@ export default function EventsMap() {
           </Marker>
         )}
 
-        <HeatmapLayer points={farMessages.map(msg => [msg.lat, msg.lng, 0.5])} />
-
+        {/* 🔥 Heatmap visualization */}
+        <HeatmapLayer points={heatPoints} />
       </MapContainer>
 
       <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
@@ -148,15 +142,6 @@ export default function EventsMap() {
 
       <style>{`
         .custom-speech-bubble {
-          font-size: 20px;
-          text-align: center;
-          line-height: 1;
-          user-select: none;
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        .custom-green-dot {
           font-size: 20px;
           text-align: center;
           line-height: 1;
