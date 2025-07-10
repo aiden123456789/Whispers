@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import dynamic from 'next/dynamic';
 import { DivIcon } from 'leaflet';
 import { Whisper } from './types';
@@ -16,13 +16,14 @@ const HeatmapLayer = dynamic(() => import('./HeatmapLayer').then(m => m.HeatmapL
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 304;
+const MAX_CHARACTERS = 50;
 
 export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
   const [messages, setMessages] = useState<Whisper[]>([]);
   const [speechBubbleIcon, setSpeechBubbleIcon] = useState<DivIcon | null>(null);
-  const whisperInput = useRef<HTMLInputElement>(null);
   const [myMessageId, setMyMessageId] = useState<number | null>(null);
+  const [whisperText, setWhisperText] = useState('');
 
   useEffect(() => {
     import('leaflet').then(L => {
@@ -53,8 +54,8 @@ export default function EventsMap() {
     e.preventDefault();
     if (!center) return;
 
-    const text = whisperInput.current?.value.trim() ?? '';
-    if (!text) return;
+    const text = whisperText.trim();
+    if (!text || text.length > MAX_CHARACTERS) return;
 
     const [lat, lng] = center;
     const res = await fetch('/api/messages', {
@@ -65,7 +66,7 @@ export default function EventsMap() {
     const newWhisper: Whisper = await res.json();
     setMessages(prev => [...prev, newWhisper]);
     setMyMessageId(newWhisper.id);
-    if (whisperInput.current) whisperInput.current.value = '';
+    setWhisperText('');
   }
 
   const nearMessages: Whisper[] = [];
@@ -127,17 +128,23 @@ export default function EventsMap() {
           </Marker>
         )}
 
-        {/* 🔥 Heatmap visualization */}
         <HeatmapLayer points={heatPoints} />
       </MapContainer>
 
-      <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
-        <input
-          ref={whisperInput}
-          placeholder="Leave a whisper…"
-          className="flex-grow p-2 border rounded"
-        />
-        <button className="px-4 py-2 border rounded">Send</button>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-1 mt-4">
+        <div className="flex gap-2">
+          <input
+            value={whisperText}
+            onChange={e => setWhisperText(e.target.value)}
+            maxLength={MAX_CHARACTERS}
+            placeholder="Leave a whisper…"
+            className="flex-grow p-2 border rounded"
+          />
+          <button className="px-4 py-2 border rounded">Send</button>
+        </div>
+        <div className="text-sm text-gray-500 text-right">
+          {MAX_CHARACTERS - whisperText.length} characters left
+        </div>
       </form>
 
       <style>{`
