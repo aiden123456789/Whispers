@@ -21,7 +21,7 @@ export function useGeolocation(fallback: [number, number]) {
         setError(err.message || 'Location error');
         setPosition(fallback);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
     );
 
     return () => navigator.geolocation.clearWatch(id);
