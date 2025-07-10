@@ -30,18 +30,18 @@ export function HeatmapLayer({ points }: HeatmapLayerProps) {
       radius: 100,
       blur: 15,
       gradient: {
-        0.9: 'blue',
+        0.75: 'blue',
       },
     });
 
     heatRef.current = heatLayer;
-    if (map.getZoom() < 40) {
+    if (map.getZoom() < 50) {
       heatLayer.addTo(map);
     }
 
     const handleZoom = () => {
       const zoom = map.getZoom();
-      if (zoom >= 17) {
+      if (zoom >= 50) {
         map.removeLayer(heatLayer);
       } else {
         if (!map.hasLayer(heatLayer)) {
