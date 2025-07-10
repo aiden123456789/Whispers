@@ -15,7 +15,7 @@ const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: f
 const HeatmapLayer = dynamic(() => import('./HeatmapLayer').then(m => m.HeatmapLayer), { ssr: false });
 
 const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
-const GROUP_RADIUS_METERS = 200;
+const GROUP_RADIUS_METERS = 304;
 
 export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
