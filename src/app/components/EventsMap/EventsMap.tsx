@@ -177,6 +177,19 @@ export default function EventsMap() {
         </div>
       </form>
 
+      <footer className="mt-8 text-center text-sm text-gray-600">
+        ❤️ Like this project? Support it on{' '}
+        <a
+          href="https://patreon.com/AKingB15?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline hover:text-blue-700"
+        >
+          Patreon
+        </a>
+        .
+      </footer>
+
       <style>{`
         .custom-speech-bubble {
           font-size: 20px;
