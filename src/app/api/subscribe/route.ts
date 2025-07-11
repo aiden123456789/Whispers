@@ -1,6 +1,7 @@
 // src/app/api/subscribe/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { sendPushNotification } from '../../lib/webPush';
+import type { PushSubscription } from 'web-push';
 
 const subscriptions: PushSubscription[] = [];
 
