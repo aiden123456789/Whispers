@@ -1,6 +1,7 @@
+// src/app/layout.tsx
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import 'leaflet/dist/leaflet.css';
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,6 +26,26 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator && 'PushManager' in window) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker
+                    .register('/service-worker.js')
+                    .then(swReg => {
+                      console.log('✅ Service Worker registered', swReg);
+                    })
+                    .catch(err => {
+                      console.error('❌ Service Worker registration failed', err);
+                    });
+                });
+              }
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
