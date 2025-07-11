@@ -1,5 +1,5 @@
-// @ts-ignore
 import webpush from 'web-push';
+import type { PushSubscription } from 'web-push';
 
 const vapidKeys = {
   publicKey: process.env.VAPID_PUBLIC_KEY!,
