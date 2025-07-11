@@ -1,5 +1,5 @@
 // @ts-ignore
-const webpush = require('web-push');
+import webpush from 'web-push';
 
 const vapidKeys = {
   publicKey: process.env.VAPID_PUBLIC_KEY!,
