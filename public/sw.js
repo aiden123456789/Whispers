@@ -4,6 +4,8 @@ self.addEventListener('push', function (event) {
     body: data.body,
     icon: '/icon.png',
     badge: '/badge.png',
+    vibrate: [100, 50, 100], // vibrate pattern: vibrate 100ms, pause 50ms, vibrate 100ms
+    requireInteraction: true, // notification stays until user interacts
   };
 
   event.waitUntil(
