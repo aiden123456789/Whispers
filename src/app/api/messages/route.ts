@@ -1,6 +1,7 @@
 // src/app/api/messages/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getAllRecentMessages, saveMessage } from "../../lib/db";
+import { containsSlur } from "../../lib/slurFilter";
 
 // In-memory IP-based rate limiting
 const ipTimestamps = new Map<string, number>();
@@ -31,7 +32,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get IP address
+    if (containsSlur(text)) {
+      return NextResponse.json(
+        { error: "Inappropriate language is not allowed." },
+        { status: 400 }
+      );
+    }
+
+    // Get IP address for rate limiting
     const ip = req.headers.get("x-forwarded-for")?.split(',')[0] ?? "unknown";
     const now = Date.now();
     const lastTime = ipTimestamps.get(ip) ?? 0;
