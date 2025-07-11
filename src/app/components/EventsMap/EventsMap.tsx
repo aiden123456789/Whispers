@@ -36,6 +36,22 @@ export default function EventsMap() {
     }
   }, []);
 
+  // Register service worker for push notifications
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('/service-worker.js')
+          .then(swReg => {
+            console.log('✅ Service Worker is registered:', swReg);
+          })
+          .catch(error => {
+            console.error('❌ Service Worker registration failed:', error);
+          });
+      });
+    }
+  }, []);
+
   useEffect(() => {
     import('leaflet').then(L => {
       setSpeechBubbleIcon(
