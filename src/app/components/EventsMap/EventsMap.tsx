@@ -27,6 +27,14 @@ export default function EventsMap() {
   const [whisperText, setWhisperText] = useState('');
   const [lastMessageTime, setLastMessageTime] = useState<number | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(Date.now());
+
+  // Ask for Notification permission on load
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     import('leaflet').then(L => {
@@ -43,36 +51,48 @@ export default function EventsMap() {
 
   useEffect(() => {
     if (!center) return;
-
-    fetch('/api/messages')
-      .then(res => res.json())
-      .then((data: Whisper[]) => {
-        console.log('[DEBUG] Loaded messages:', data);
-        setMessages(data);
-      })
-      .catch(console.error);
+    fetchAndSetMessages();
+    const interval = setInterval(fetchAndSetMessages, 10000); // poll every 10s
+    return () => clearInterval(interval);
   }, [center]);
+
+  async function fetchAndSetMessages() {
+    try {
+      const res = await fetch('/api/messages');
+      const data: Whisper[] = await res.json();
+      setMessages(data);
+
+      const newNearby = data.find(
+        (msg) =>
+          msg.createdAt > lastSeenMessageTime &&
+          center &&
+          haversineDistance(center[0], center[1], msg.lat, msg.lng) <= GROUP_RADIUS_METERS
+      );
+
+      if (newNearby && Notification.permission === 'granted') {
+        new Notification('New nearby whisper 💬', {
+          body: newNearby.text,
+        });
+        setLastSeenMessageTime(Date.now());
+      }
+    } catch (err) {
+      console.error('Failed to fetch messages:', err);
+    }
+  }
 
   useEffect(() => {
     if (!lastMessageTime) return;
-
     const interval = setInterval(() => {
       const secondsPassed = Math.floor((Date.now() - lastMessageTime) / 1000);
       const remaining = RATE_LIMIT_SECONDS - secondsPassed;
       setCooldown(remaining > 0 ? remaining : 0);
     }, 1000);
-
     return () => clearInterval(interval);
   }, [lastMessageTime]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!center) return;
-
-    if (cooldown > 0) {
-      alert(`Please wait ${cooldown}s before sending another whisper.`);
-      return;
-    }
+    if (!center || cooldown > 0) return;
 
     const text = whisperText.trim();
     if (!text || text.length > MAX_CHARACTERS) return;
@@ -103,14 +123,10 @@ export default function EventsMap() {
 
   if (center) {
     const [userLat, userLng] = center;
-
     for (const msg of messages) {
-      if (msg.lat == null || msg.lng == null) continue;
-
       const distance = haversineDistance(userLat, userLng, msg.lat, msg.lng);
       const isNear = distance <= GROUP_RADIUS_METERS;
       const isMine = msg.id === myMessageId;
-
       if (isMine) myMessage = msg;
       if (isNear) nearMessages.push(msg);
       else if (!isMine) farMessages.push(msg);
