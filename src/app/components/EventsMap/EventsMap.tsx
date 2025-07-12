@@ -28,15 +28,13 @@ export default function EventsMap() {
   const [whisperText, setWhisperText] = useState('');
   const [lastMessageTime, setLastMessageTime] = useState<number | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const [sending, setSending] = useState(false); // 🆕
 
-  // Load last message time from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = parseInt(stored);
-      if (!isNaN(parsed)) {
-        setLastMessageTime(parsed);
-      }
+      if (!isNaN(parsed)) setLastMessageTime(parsed);
     }
   }, []);
 
@@ -55,60 +53,65 @@ export default function EventsMap() {
 
   useEffect(() => {
     if (!center) return;
-
     fetch('/api/messages')
       .then(res => res.json())
-      .then((data: Whisper[]) => {
-        setMessages(data);
-      })
+      .then((data: Whisper[]) => setMessages(data))
       .catch(console.error);
   }, [center]);
 
   useEffect(() => {
     if (!lastMessageTime) return;
-
     const interval = setInterval(() => {
       const secondsPassed = Math.floor((Date.now() - lastMessageTime) / 1000);
       const remaining = RATE_LIMIT_SECONDS - secondsPassed;
       setCooldown(remaining > 0 ? remaining : 0);
     }, 1000);
-
     return () => clearInterval(interval);
   }, [lastMessageTime]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!center) return;
+    if (!center || sending) return;
 
-    if (cooldown > 0) {
-      alert(`Please wait ${cooldown}s before sending another whisper.`);
+    const now = Date.now();
+    const secondsPassed = lastMessageTime ? Math.floor((now - lastMessageTime) / 1000) : RATE_LIMIT_SECONDS;
+
+    if (secondsPassed < RATE_LIMIT_SECONDS) {
+      alert(`Please wait ${RATE_LIMIT_SECONDS - secondsPassed}s before sending another whisper.`);
       return;
     }
 
     const text = whisperText.trim();
     if (!text || text.length > MAX_CHARACTERS) return;
 
-    const [lat, lng] = center;
-    const res = await fetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, lat, lng }),
-    });
+    setSending(true); // ✅ lock while sending
 
-    if (!res.ok) {
-      const { error } = await res.json();
-      alert(error || 'Failed to send message');
-      return;
+    try {
+      const [lat, lng] = center;
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, lat, lng }),
+      });
+
+      if (!res.ok) {
+        const { error } = await res.json();
+        alert(error || 'Failed to send message');
+        return;
+      }
+
+      const newWhisper: Whisper = await res.json();
+      setMessages(prev => [...prev, newWhisper]);
+      setMyMessageId(newWhisper.id);
+      setWhisperText('');
+      setLastMessageTime(now);
+      localStorage.setItem(STORAGE_KEY, now.toString());
+    } catch (err) {
+      console.error(err);
+      alert('Failed to send message.');
+    } finally {
+      setSending(false); // ✅ unlock
     }
-
-    const newWhisper: Whisper = await res.json();
-    setMessages(prev => [...prev, newWhisper]);
-    setMyMessageId(newWhisper.id);
-    setWhisperText('');
-
-    const now = Date.now();
-    setLastMessageTime(now);
-    localStorage.setItem(STORAGE_KEY, now.toString()); // ✅ Persist cooldown
   }
 
   const nearMessages: Whisper[] = [];
@@ -117,14 +120,11 @@ export default function EventsMap() {
 
   if (center) {
     const [userLat, userLng] = center;
-
     for (const msg of messages) {
       if (msg.lat == null || msg.lng == null) continue;
-
       const distance = haversineDistance(userLat, userLng, msg.lat, msg.lng);
       const isNear = distance <= GROUP_RADIUS_METERS;
       const isMine = msg.id === myMessageId;
-
       if (isMine) myMessage = msg;
       if (isNear) nearMessages.push(msg);
       else if (!isMine) farMessages.push(msg);
@@ -132,7 +132,7 @@ export default function EventsMap() {
   }
 
   const groupMessages = [...nearMessages];
-  if (myMessage && !groupMessages.some(m => m.id === myMessage.id)) {
+  if (myMessage && !groupMessages.some(m => m.id === myMessage!.id)) {
     groupMessages.push(myMessage);
   }
 
@@ -160,7 +160,6 @@ export default function EventsMap() {
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
         {groupMessages.length > 0 && (
           <Marker position={[clusterLat, clusterLng]} icon={speechBubbleIcon}>
             <Popup>
@@ -168,7 +167,6 @@ export default function EventsMap() {
             </Popup>
           </Marker>
         )}
-
         <HeatmapLayer points={heatPoints} />
       </MapContainer>
 
@@ -181,8 +179,11 @@ export default function EventsMap() {
             placeholder="Leave a whisper…"
             className="flex-grow p-2 border rounded"
           />
-          <button className="px-4 py-2 border rounded" disabled={cooldown > 0}>
-            Send
+          <button
+            className="px-4 py-2 border rounded"
+            disabled={cooldown > 0 || sending}
+          >
+            {sending ? 'Sending…' : 'Send'}
           </button>
         </div>
         <div className="text-sm text-gray-500 text-right">
