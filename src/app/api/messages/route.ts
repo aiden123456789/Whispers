@@ -3,10 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAllRecentMessages, saveMessage } from "../../lib/db";
 import { containsSlur } from "../../lib/slurFilter";
 
-// In-memory IP-based rate limiting
-const ipTimestamps = new Map<string, number>();
-const RATE_LIMIT_SECONDS = 60;
-
 export async function GET() {
   try {
     const msgs = await getAllRecentMessages(); // fetch all or many messages
@@ -39,21 +35,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get IP address for rate limiting
-    const ip = req.headers.get("x-forwarded-for")?.split(',')[0] ?? "unknown";
-    const now = Date.now();
-    const lastTime = ipTimestamps.get(ip) ?? 0;
+    // No IP-based rate limit anymore — this is now handled client-side
 
-    if (now - lastTime < RATE_LIMIT_SECONDS * 1000) {
-      const secondsLeft = Math.ceil((RATE_LIMIT_SECONDS * 1000 - (now - lastTime)) / 1000);
-      return NextResponse.json(
-        { error: `Rate limit exceeded. Try again in ${secondsLeft}s.` },
-        { status: 429 }
-      );
-    }
-
-    // Save message and update timestamp
-    ipTimestamps.set(ip, now);
     const saved = await saveMessage(text, lat, lng);
     return NextResponse.json(saved, { status: 201 });
   } catch (err) {

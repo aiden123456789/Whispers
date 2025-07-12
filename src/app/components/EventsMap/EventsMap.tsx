@@ -18,6 +18,7 @@ const FALLBACK_CENTER: [number, number] = [33.9519, -83.3576];
 const GROUP_RADIUS_METERS = 304;
 const MAX_CHARACTERS = 50;
 const RATE_LIMIT_SECONDS = 60;
+const STORAGE_KEY = 'lastMessageTimestamp';
 
 export default function EventsMap() {
   const { position: center, error: geoError } = useGeolocation(FALLBACK_CENTER);
@@ -27,6 +28,17 @@ export default function EventsMap() {
   const [whisperText, setWhisperText] = useState('');
   const [lastMessageTime, setLastMessageTime] = useState<number | null>(null);
   const [cooldown, setCooldown] = useState(0);
+
+  // Load last message time from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = parseInt(stored);
+      if (!isNaN(parsed)) {
+        setLastMessageTime(parsed);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     import('leaflet').then(L => {
@@ -47,7 +59,6 @@ export default function EventsMap() {
     fetch('/api/messages')
       .then(res => res.json())
       .then((data: Whisper[]) => {
-        console.log('[DEBUG] Loaded messages:', data);
         setMessages(data);
       })
       .catch(console.error);
@@ -94,7 +105,10 @@ export default function EventsMap() {
     setMessages(prev => [...prev, newWhisper]);
     setMyMessageId(newWhisper.id);
     setWhisperText('');
-    setLastMessageTime(Date.now());
+
+    const now = Date.now();
+    setLastMessageTime(now);
+    localStorage.setItem(STORAGE_KEY, now.toString()); // ✅ Persist cooldown
   }
 
   const nearMessages: Whisper[] = [];
@@ -180,7 +194,7 @@ export default function EventsMap() {
       <footer className="mt-8 text-center text-sm text-gray-600">
         ❤️ Like this project? Support it on{' '}
         <a
-          href="https://patreon.com/AKingB15?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink"
+          href="https://patreon.com/AKingB15"
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 underline hover:text-blue-700"
