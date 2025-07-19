@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Whispers</string>
-    <string name="title_activity_main">Whispers</string>
-    <string name="package_name">com.akingb15.whispers</string>
-    <string name="custom_url_scheme">com.akingb15.whispers</string>
-</resources>
