@@ -41,7 +41,7 @@ export async function saveMessage(text: string, lat: number, lng: number) {
 
 // 🆕 Get all recent messages (up to 90 days old), sorted by newest first
 export async function getAllRecentMessages(limit = 100) {
-  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 90 days
 
   const { rows } = await turso.execute(
     `
@@ -61,3 +61,5 @@ export async function getAllRecentMessages(limit = 100) {
     createdAt: r.createdAt,
   }));
 }
+
+export { turso };
