@@ -39,10 +39,20 @@ export async function saveMessage(text: string, lat: number, lng: number) {
   return { id, text, lat, lng, createdAt: now };
 }
 
-// 🆕 Get all recent messages (up to 90 days old), sorted by newest first
+// 🆕 Get all recent messages (up to 30 days old), sorted by newest first
 export async function getAllRecentMessages(limit = 100) {
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 90 days
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
 
+  // Delete old messages first
+  await turso.execute(
+    `
+      DELETE FROM whispers
+      WHERE createdAt <= ?
+    `,
+    [cutoff]
+  );
+
+  // Now select recent messages
   const { rows } = await turso.execute(
     `
       SELECT * FROM whispers
