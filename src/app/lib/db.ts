@@ -23,9 +23,6 @@ await turso.execute(`
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
-  // 🔴 TEMP: Clear all messages from the table
-  await turso.execute(`DELETE FROM whispers;`);
-
   // Insert the new message
   await turso.execute(
     `
