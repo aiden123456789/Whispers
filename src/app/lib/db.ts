@@ -23,10 +23,6 @@ await turso.execute(`
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
-   // 🔴 TEMP: Clear all messages from the table
-  await turso.execute(`DELETE FROM whispers;`);
-
-
   // ⛓️ Round location to ~110m precision (error ≥ 300m combined)
   const roundedLat = Math.round(lat * 100) / 100;
   const roundedLng = Math.round(lng * 100) / 100;
