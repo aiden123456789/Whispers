@@ -23,21 +23,30 @@ await turso.execute(`
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
+   // 🔴 TEMP: Clear all messages from the table
+  await turso.execute(`DELETE FROM whispers;`);
+
+
+  // ⛓️ Round location to ~110m precision (error ≥ 300m combined)
+  const roundedLat = Math.round(lat * 100) / 100;
+  const roundedLng = Math.round(lng * 100) / 100;
+
   // Insert the new message
   await turso.execute(
     `
       INSERT INTO whispers (text, lat, lng, createdAt)
       VALUES (?, ?, ?, ?);
     `,
-    [text, lat, lng, now]
+    [text, roundedLat, roundedLng, now]
   );
 
   // Retrieve the auto-incremented ID
   const { rows } = await turso.execute(`SELECT last_insert_rowid() AS id;`);
   const id = (rows[0] as Row).id as number;
 
-  return { id, text, lat, lng, createdAt: now };
+  return { id, text, lat: roundedLat, lng: roundedLng, createdAt: now };
 }
+
 
 // 🆕 Get all recent messages (up to 30 days old), sorted by newest first
 export async function getAllRecentMessages(limit = 100) {
