@@ -155,7 +155,7 @@ export default function EventsMap() {
         </div>
       )}
 
-      <MapContainer center={center} zoom={11} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
+      <MapContainer center={center} zoom={10} scrollWheelZoom style={{ height: '80vh', width: '100%' }}>
         <TileLayer
           attribution="&copy; OpenStreetMap"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
