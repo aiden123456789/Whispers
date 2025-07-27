@@ -23,7 +23,7 @@ await turso.execute(`
 export async function saveMessage(text: string, lat: number, lng: number) {
   const now = Date.now();
 
-  await turso.execute(`DELETE FROM whispers;`);
+  
   const roundedLat = Math.round(lat * 10) / 10;
   const roundedLng = Math.round(lng * 10) / 10;
 
