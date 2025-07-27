@@ -19,8 +19,8 @@ function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 // Utility to round to 2 decimal places
-function roundToTwoDecimals(num: number): number {
-  return Math.round(num * 100) / 100;
+function roundToOneDecimals(num: number): number {
+  return Math.round(num * 10) / 10;
 }
 
 export async function GET(req: Request) {
@@ -48,8 +48,8 @@ export async function GET(req: Request) {
     }
 
     // Round incoming lat/lng to 2 decimal places
-    const lat = roundToTwoDecimals(latRaw);
-    const lng = roundToTwoDecimals(lngRaw);
+    const lat = roundToOneDecimals(latRaw);
+    const lng = roundToOneDecimals(lngRaw);
 
     const messages = await getAllRecentMessages(1000); // Adjust count as needed
 
@@ -57,8 +57,8 @@ export async function GET(req: Request) {
       if (msg.lat == null || msg.lng == null) return false;
 
       // Round message coordinates before distance check
-      const msgLat = roundToTwoDecimals(Number(msg.lat));
-      const msgLng = roundToTwoDecimals(Number(msg.lng));
+      const msgLat = roundToOneDecimals(Number(msg.lat));
+      const msgLng = roundToOneDecimals(Number(msg.lng));
 
       return getDistanceMeters(lat, lng, msgLat, msgLng) <= 300;
     });
